@@ -13,6 +13,7 @@
     "com.unity.render-pipelines.universal": "17.0.3",
     "com.unity.services.analytics": "6.0.3",
     "com.unity.textmeshpro": "3.2.0-pre.12",
-    "com.unity.ugui": "2.0.0"
+    "com.unity.ugui": "2.0.0",
+    "com.unity.mobile.notifications": "2.3.2"
   }
 }
