@@ -393,6 +393,30 @@ public sealed class PlayerController : MonoBehaviour
         ScreenShake.Instance?.ShakeDeath();
         HapticFeedback.Instance?.VibrateOnDeath();
         ComboSystem.Instance?.ResetAll();
+        StartCoroutine(DeathSequence());
+    }
+
+    private System.Collections.IEnumerator DeathSequence()
+    {
+        // Slow-mo death freeze
+        Time.timeScale = 0.15f;
+        Time.fixedDeltaTime = 0.02f * Time.timeScale;
+
+        // Tumble the player model
+        float tumbleTimer = 0f;
+        Vector3 tumbleAxis = new Vector3(0.3f, 0.1f, 1f).normalized;
+        while (tumbleTimer < 0.8f)
+        {
+            tumbleTimer += Time.unscaledDeltaTime;
+            transform.Rotate(tumbleAxis * (720f * Time.unscaledDeltaTime), Space.Self);
+            transform.position += Vector3.down * (3f * Time.unscaledDeltaTime);
+            yield return null;
+        }
+
+        // Restore time before game over transition
+        Time.timeScale = 1f;
+        Time.fixedDeltaTime = 0.02f;
+
         GameManager.Instance?.HandlePlayerDeath(this);
     }
 }

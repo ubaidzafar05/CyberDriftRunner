@@ -109,7 +109,7 @@ public sealed class GameManager : MonoBehaviour
         State = GameState.Playing;
         AnalyticsManager.Instance?.TrackRunStart();
         MonetizationV2.Instance?.OnRunStarted();
-        SceneManager.LoadScene(SceneNames.GameScene);
+        LoadSceneSafe(SceneNames.GameScene);
     }
 
     public void RestartRun()
@@ -121,7 +121,7 @@ public sealed class GameManager : MonoBehaviour
     {
         ResetTimeControls();
         State = GameState.Menu;
-        SceneManager.LoadScene(SceneNames.MainMenu);
+        LoadSceneSafe(SceneNames.MainMenu);
     }
 
     public void HandlePlayerDeath(PlayerController player)
@@ -156,7 +156,7 @@ public sealed class GameManager : MonoBehaviour
             return;
         }
 
-        MonetizationManager.Instance.ShowRewardedRevive(HandleReviveResult);
+        MonetizationManager.Instance?.ShowRewardedRevive(HandleReviveResult);
     }
 
     public void DeclineReviveOffer()
@@ -184,7 +184,8 @@ public sealed class GameManager : MonoBehaviour
         pendingRevivePlayer = null;
         ResetTimeControls();
         State = GameState.GameOver;
-        SceneManager.LoadScene(SceneNames.GameOver);
+        RateAppPrompt.Instance?.RecordSession();
+        LoadSceneSafe(SceneNames.GameOver);
     }
 
     public void AddCredits(int amount)
@@ -328,5 +329,17 @@ public sealed class GameManager : MonoBehaviour
         int nearMisses = ComboSystem.Instance != null ? ComboSystem.Instance.NearMissCount : 0;
         int maxCombo = ComboSystem.Instance != null ? ComboSystem.Instance.MaxCombo : 0;
         DailyChallengeSystem.Instance?.UpdateProgressAfterRun(LastRunSummary, dronesKilled, 0, nearMisses, maxCombo);
+    }
+
+    private void LoadSceneSafe(string sceneName)
+    {
+        if (SceneLoader.Instance != null)
+        {
+            SceneLoader.Instance.LoadScene(sceneName);
+        }
+        else
+        {
+            SceneManager.LoadScene(sceneName);
+        }
     }
 }

@@ -14,6 +14,7 @@ public sealed class MainMenuController : MonoBehaviour
     [SerializeField] private Text currencyText;
     [SerializeField] private Text dailyRewardText;
     [SerializeField] private SkinShopController shopController;
+    [SerializeField] private LeaderboardPanel leaderboardPanel;
 
     private void Start()
     {
@@ -42,7 +43,7 @@ public sealed class MainMenuController : MonoBehaviour
 
     public void Play()
     {
-        GameManager.Instance.StartRun();
+        GameManager.Instance?.StartRun();
     }
 
     public void ToggleSettings()
@@ -66,6 +67,16 @@ public sealed class MainMenuController : MonoBehaviour
     public void ToggleShop()
     {
         shopController?.TogglePanel();
+    }
+
+    public void ToggleLeaderboard()
+    {
+        leaderboardPanel?.TogglePanel();
+    }
+
+    public void BindLeaderboard(LeaderboardPanel panel)
+    {
+        leaderboardPanel = panel;
     }
 
     public void BindShop(SkinShopController controller)

@@ -89,6 +89,8 @@ public sealed class SkinShopController : MonoBehaviour
 
     private void HandleSkinAction(SkinDefinition skin)
     {
+        if (ProgressionManager.Instance == null) return;
+
         if (ProgressionManager.Instance.IsUnlocked(skin.Id))
         {
             ProgressionManager.Instance.SelectSkin(skin.Id);
@@ -105,7 +107,7 @@ public sealed class SkinShopController : MonoBehaviour
         {
             MonetizationManager.Instance.Purchase(skin.PremiumProductId, succeeded =>
             {
-                if (succeeded)
+                if (succeeded && ProgressionManager.Instance != null)
                 {
                     ProgressionManager.Instance.UnlockSkin(skin.Id);
                     ProgressionManager.Instance.SelectSkin(skin.Id);
@@ -130,6 +132,8 @@ public sealed class SkinShopController : MonoBehaviour
 
     private string GetStatusText(SkinDefinition skin)
     {
+        if (ProgressionManager.Instance == null) return "";
+
         if (ProgressionManager.Instance.SelectedSkinId == skin.Id)
         {
             return "Selected";

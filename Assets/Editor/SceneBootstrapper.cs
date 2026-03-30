@@ -215,6 +215,8 @@ public static class SceneBootstrapper
         // UI animator + tutorial
         new GameObject("UIAnimator").AddComponent<UIAnimator>();
         new GameObject("PerformanceAuditor").AddComponent<PerformanceAuditor>();
+        new GameObject("AchievementPopup").AddComponent<AchievementPopup>();
+        new GameObject("FloatingText").AddComponent<FloatingTextManager>();
 
         // Post-processing config (URP placeholder)
         camera.gameObject.AddComponent<PostProcessingConfig>();
@@ -254,9 +256,10 @@ public static class SceneBootstrapper
 
         Button playButton = CreateButton(canvas.transform, font, "Play", new Vector2(0f, 60f), new Vector2(260f, 80f));
         Button shopButton = CreateButton(canvas.transform, font, "Skins", new Vector2(0f, -40f), new Vector2(260f, 80f));
+        Button leaderboardButton = CreateButton(canvas.transform, font, "Leaderboard", new Vector2(0f, -90f), new Vector2(260f, 60f));
         Button settingsButton = CreateButton(canvas.transform, font, "Settings", new Vector2(0f, -40f), new Vector2(260f, 80f));
-        settingsButton.GetComponent<RectTransform>().anchoredPosition = new Vector2(0f, -140f);
-        Button quitButton = CreateButton(canvas.transform, font, "Quit", new Vector2(0f, -240f), new Vector2(260f, 80f));
+        settingsButton.GetComponent<RectTransform>().anchoredPosition = new Vector2(0f, -170f);
+        Button quitButton = CreateButton(canvas.transform, font, "Quit", new Vector2(0f, -250f), new Vector2(260f, 80f));
 
         GameObject shopPanel = CreatePanel(canvas.transform, "ShopPanel", new Vector2(0f, 20f), new Vector2(640f, 540f));
         Text bankText = CreateText(shopPanel.transform, font, "Bank 0", new Vector2(0f, 210f), new Vector2(240f, 40f), 28, TextAnchor.MiddleCenter, Color.cyan);
@@ -272,6 +275,21 @@ public static class SceneBootstrapper
         controller.BindShop(shopController);
         shopPanel.SetActive(false);
 
+        // Leaderboard panel
+        GameObject lbPanel = CreatePanel(canvas.transform, "LeaderboardPanel", new Vector2(0f, 20f), new Vector2(640f, 540f));
+        CreateText(lbPanel.transform, font, "LEADERBOARD", new Vector2(0f, 230f), new Vector2(400f, 50f), 32, TextAnchor.MiddleCenter, Color.cyan);
+        GameObject lbContent = new GameObject("LBContent", typeof(RectTransform));
+        lbContent.transform.SetParent(lbPanel.transform, false);
+        RectTransform lbContentRect = lbContent.GetComponent<RectTransform>();
+        lbContentRect.anchorMin = new Vector2(0.5f, 1f);
+        lbContentRect.anchorMax = new Vector2(0.5f, 1f);
+        lbContentRect.anchoredPosition = new Vector2(0f, -40f);
+        lbContentRect.sizeDelta = new Vector2(600f, 440f);
+        LeaderboardPanel lbController = lbPanel.AddComponent<LeaderboardPanel>();
+        lbController.Configure(lbPanel, lbContentRect, font);
+        controller.BindLeaderboard(lbController);
+        lbPanel.SetActive(false);
+
         GameObject settingsPanel = CreatePanel(canvas.transform, "SettingsPanel", new Vector2(0f, -10f), new Vector2(420f, 260f));
         settingsPanel.SetActive(false);
 
@@ -286,6 +304,7 @@ public static class SceneBootstrapper
         controller.Configure(settingsPanel, soundValue, vibrationValue);
         UnityEventTools.AddPersistentListener(playButton.onClick, controller.Play);
         UnityEventTools.AddPersistentListener(shopButton.onClick, controller.ToggleShop);
+        UnityEventTools.AddPersistentListener(leaderboardButton.onClick, controller.ToggleLeaderboard);
         UnityEventTools.AddPersistentListener(settingsButton.onClick, controller.ToggleSettings);
         UnityEventTools.AddPersistentListener(quitButton.onClick, controller.QuitGame);
         UnityEventTools.AddPersistentListener(soundButton.onClick, controller.ToggleSound);
@@ -368,6 +387,9 @@ public static class SceneBootstrapper
         new GameObject("CloudSaveManager").AddComponent<CloudSaveManager>();
         new GameObject("NotificationScheduler").AddComponent<NotificationScheduler>();
         new GameObject("TipSystem").AddComponent<TipSystem>();
+        new GameObject("ConsentManager").AddComponent<ConsentManager>();
+        new GameObject("SceneLoader").AddComponent<SceneLoader>();
+        new GameObject("RateAppPrompt").AddComponent<RateAppPrompt>();
     }
 
     private static void CreateDirectionalLight()

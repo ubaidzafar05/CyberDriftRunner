@@ -44,6 +44,12 @@ public sealed class GameOverController : MonoBehaviour
         ShowXpGain(summary);
         ShowDailyChallengeProgress();
         ShowTip();
+
+        // Show rate prompt after good runs
+        if (summary.Score > 500)
+        {
+            RateAppPrompt.Instance?.TryShowPrompt();
+        }
     }
 
     private void ShowBestScores(RunSummary summary)

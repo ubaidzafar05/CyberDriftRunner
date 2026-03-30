@@ -11,6 +11,7 @@ public sealed class LeaderboardSystem : MonoBehaviour
     [System.Serializable]
     public struct LeaderboardEntry
     {
+        public string PlayerName;
         public int Score;
         public float Distance;
         public string Date;
@@ -37,6 +38,7 @@ public sealed class LeaderboardSystem : MonoBehaviour
     {
         LeaderboardEntry entry = new LeaderboardEntry
         {
+            PlayerName = "You",
             Score = summary.Score,
             Distance = summary.Distance,
             Date = System.DateTime.UtcNow.ToString("yyyy-MM-dd")
@@ -73,6 +75,12 @@ public sealed class LeaderboardSystem : MonoBehaviour
         }
 
         return _entries.Count + 1;
+    }
+
+    public List<LeaderboardEntry> GetTopEntries(int count)
+    {
+        int take = Mathf.Min(count, _entries.Count);
+        return _entries.GetRange(0, take);
     }
 
     private void Load()

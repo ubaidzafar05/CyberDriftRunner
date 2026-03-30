@@ -46,6 +46,7 @@ public sealed class CreditPickup : MonoBehaviour
         GameManager.Instance?.AddScore(scoreBonus);
         ComboSystem.Instance?.RegisterPickup();
         HapticFeedback.Instance?.VibrateOnCollect();
+        FloatingTextManager.Instance?.SpawnCredits(transform.position, creditValue);
         ReturnToPool();
     }
 
