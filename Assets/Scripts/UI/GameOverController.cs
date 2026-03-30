@@ -14,6 +14,8 @@ public sealed class GameOverController : MonoBehaviour
     [SerializeField] private Text leaderboardRankText;
     [SerializeField] private Text xpGainText;
     [SerializeField] private Text dailyChallengeText;
+    [SerializeField] private Text tipText;
+    [SerializeField] private Text feverCountText;
 
     public void Configure(Text score, Text distance, Text credits, Text survival)
     {
@@ -41,6 +43,7 @@ public sealed class GameOverController : MonoBehaviour
         ShowLeaderboardRank(summary);
         ShowXpGain(summary);
         ShowDailyChallengeProgress();
+        ShowTip();
     }
 
     private void ShowBestScores(RunSummary summary)
@@ -172,5 +175,11 @@ public sealed class GameOverController : MonoBehaviour
         }
 
         ShareManager.Instance?.ShareScore(GameManager.Instance.LastRunSummary);
+    }
+
+    private void ShowTip()
+    {
+        if (tipText == null || TipSystem.Instance == null) return;
+        tipText.text = TipSystem.Instance.GetTip();
     }
 }

@@ -9,6 +9,8 @@ public sealed class HUDController : MonoBehaviour
     [SerializeField] private Text powerUpText;
     [SerializeField] private Text comboText;
     [SerializeField] private Text zoneText;
+    [SerializeField] private Text feverText;
+    [SerializeField] private Text fpsText;
 
     private int _cachedScore = -1;
     private int _cachedDistance = -1;
@@ -81,6 +83,7 @@ public sealed class HUDController : MonoBehaviour
         }
 
         UpdateComboDisplay();
+        UpdateFeverDisplay();
     }
 
     private void UpdateComboDisplay()
@@ -103,6 +106,26 @@ public sealed class HUDController : MonoBehaviour
             {
                 comboText.gameObject.SetActive(false);
             }
+        }
+    }
+
+    private void UpdateFeverDisplay()
+    {
+        if (feverText == null || FeverMode.Instance == null)
+        {
+            return;
+        }
+
+        if (FeverMode.Instance.IsFeverActive)
+        {
+            float timeLeft = FeverMode.Instance.FeverTimeLeft;
+            feverText.text = $"🔥 FEVER {timeLeft:0.0}s 🔥";
+            feverText.color = Color.Lerp(Color.red, Color.yellow, Mathf.PingPong(Time.time * 3f, 1f));
+            feverText.gameObject.SetActive(true);
+        }
+        else
+        {
+            feverText.gameObject.SetActive(false);
         }
     }
 

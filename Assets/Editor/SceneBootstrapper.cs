@@ -190,8 +190,18 @@ public static class SceneBootstrapper
         new GameObject("ComboSystem").AddComponent<ComboSystem>();
         new GameObject("HapticFeedback").AddComponent<HapticFeedback>();
         new GameObject("MilestoneSystem").AddComponent<MilestoneSystem>();
+        new GameObject("FeverMode").AddComponent<FeverMode>();
         GameObject pauseObject = new GameObject("PauseController");
         pauseObject.AddComponent<PauseController>();
+
+        // Magnet field on player
+        player.AddComponent<MagnetField>();
+
+        // Dynamic camera
+        camera.gameObject.AddComponent<DynamicCameraController>();
+
+        // FPS counter
+        camera.gameObject.AddComponent<FpsCounter>();
 
         // Scrolling ground
         GameObject scrollingRoad = new GameObject("ScrollingGround");
@@ -353,6 +363,11 @@ public static class SceneBootstrapper
         new GameObject("MonetizationV2").AddComponent<MonetizationV2>();
         new GameObject("AnalyticsManager").AddComponent<AnalyticsManager>();
         new GameObject("ShareManager").AddComponent<ShareManager>();
+        new GameObject("SettingsManager").AddComponent<SettingsManager>();
+        new GameObject("GooglePlayManager").AddComponent<GooglePlayManager>();
+        new GameObject("CloudSaveManager").AddComponent<CloudSaveManager>();
+        new GameObject("NotificationScheduler").AddComponent<NotificationScheduler>();
+        new GameObject("TipSystem").AddComponent<TipSystem>();
     }
 
     private static void CreateDirectionalLight()

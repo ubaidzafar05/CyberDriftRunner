@@ -104,6 +104,7 @@ public sealed class PlayerController : MonoBehaviour
 
         HandleTouchInput();
         HandleMouseInput();
+        HandleAutoShoot();
         UpdateSlideTimer();
         UpdateHackMode();
         UpdateMovement();
@@ -191,7 +192,10 @@ public sealed class PlayerController : MonoBehaviour
         float duration = Time.unscaledTime - touchStartTime;
         trackedTouchId = -1;
 
-        if (delta.magnitude < swipeThresholdPixels && duration <= tapMaxDuration)
+        float sensitivity = SettingsManager.Instance != null ? SettingsManager.Instance.SwipeSensitivity : 1f;
+        float adjustedThreshold = swipeThresholdPixels / sensitivity;
+
+        if (delta.magnitude < adjustedThreshold && duration <= tapMaxDuration)
         {
             if (shootingSystem != null && shootingSystem.TryShootNearestTarget())
             {
@@ -286,6 +290,41 @@ public sealed class PlayerController : MonoBehaviour
 
         Vector3 move = new Vector3(moveX, verticalVelocity * Time.deltaTime, GameManager.Instance.CurrentForwardSpeed * Time.deltaTime);
         characterController.Move(move);
+    }
+
+    private float AutoShootCooldown = 0.35f;
+    private float _autoShootTimer;
+
+    private void HandleAutoShoot()
+    {
+        if (SettingsManager.Instance == null || !SettingsManager.Instance.AutoShootEnabled)
+            return;
+
+        if (FeverMode.Instance != null && FeverMode.Instance.IsFeverActive)
+        {
+            _autoShootTimer -= Time.deltaTime;
+            if (_autoShootTimer <= 0f)
+            {
+                _autoShootTimer = AutoShootCooldown * 0.5f; // Faster during fever
+                if (shootingSystem != null && shootingSystem.TryShootNearestTarget())
+                {
+                    AudioManager.Instance?.PlayShoot();
+                    vfxController?.OnShoot();
+                }
+            }
+            return;
+        }
+
+        _autoShootTimer -= Time.deltaTime;
+        if (_autoShootTimer <= 0f)
+        {
+            _autoShootTimer = AutoShootCooldown;
+            if (shootingSystem != null && shootingSystem.TryShootNearestTarget())
+            {
+                AudioManager.Instance?.PlayShoot();
+                vfxController?.OnShoot();
+            }
+        }
     }
 
     private void TryHackNearestThreat()

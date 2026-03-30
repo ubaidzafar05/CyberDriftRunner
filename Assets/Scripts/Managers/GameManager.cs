@@ -259,6 +259,7 @@ public sealed class GameManager : MonoBehaviour
         ResetTimeControls();
         MilestoneSystem.Instance?.ResetForRun();
         ComboSystem.Instance?.ResetAll();
+        FeverMode.Instance?.ResetForRun();
     }
 
     private void ResetTimeControls()
@@ -320,6 +321,8 @@ public sealed class GameManager : MonoBehaviour
         AnalyticsManager.Instance?.TrackRunEnd(LastRunSummary);
         MonetizationV2.Instance?.AddToPiggyBank(LastRunSummary.Credits);
         SeasonPassSystem.Instance?.AddSeasonXp(Mathf.FloorToInt(LastRunSummary.Distance * 0.3f));
+        GooglePlayManager.Instance?.SubmitScore(LastRunSummary.Score);
+        NotificationScheduler.Instance?.RecordPlaySession();
 
         int dronesKilled = ComboSystem.Instance != null ? ComboSystem.Instance.KillStreak : 0;
         int nearMisses = ComboSystem.Instance != null ? ComboSystem.Instance.NearMissCount : 0;

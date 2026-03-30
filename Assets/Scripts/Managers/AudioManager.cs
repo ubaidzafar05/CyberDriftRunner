@@ -68,6 +68,35 @@ public sealed class AudioManager : MonoBehaviour
         HandleSceneLoaded(SceneManager.GetActiveScene(), LoadSceneMode.Single);
     }
 
+    public void SetMusicVolume(float volume)
+    {
+        musicVolume = Mathf.Clamp01(volume);
+        if (musicSource != null) musicSource.volume = musicVolume;
+    }
+
+    public void SetSfxVolume(float volume)
+    {
+        sfxVolume = Mathf.Clamp01(volume);
+    }
+
+    public void SetMusicEnabled(bool enabled)
+    {
+        musicEnabled = enabled;
+        if (!musicEnabled && musicSource != null)
+        {
+            musicSource.Stop();
+        }
+        else if (musicEnabled)
+        {
+            HandleSceneLoaded(SceneManager.GetActiveScene(), LoadSceneMode.Single);
+        }
+    }
+
+    public void SetSfxEnabled(bool enabled)
+    {
+        sfxEnabled = enabled;
+    }
+
     private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         if (!musicEnabled)
