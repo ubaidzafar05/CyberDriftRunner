@@ -30,7 +30,7 @@ public sealed class PowerUpPickup : MonoBehaviour
         }
 
         player.PowerUps.ApplyPowerUp(powerUpType, duration);
-        GameManager.Instance.AddScore(scoreBonus);
+        GameManager.Instance?.AddScore(scoreBonus);
         AudioManager.Instance?.PlayPowerUp();
         player.GetComponent<PlayerVfxController>()?.OnPowerUp();
         ReturnToPool();

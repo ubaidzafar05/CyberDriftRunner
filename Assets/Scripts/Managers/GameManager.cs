@@ -107,6 +107,8 @@ public sealed class GameManager : MonoBehaviour
     {
         ResetRunState();
         State = GameState.Playing;
+        AnalyticsManager.Instance?.TrackRunStart();
+        MonetizationV2.Instance?.OnRunStarted();
         SceneManager.LoadScene(SceneNames.GameScene);
     }
 
@@ -178,6 +180,7 @@ public sealed class GameManager : MonoBehaviour
         };
 
         CommitRunRewards();
+        CommitEndOfRunSystems();
         pendingRevivePlayer = null;
         ResetTimeControls();
         State = GameState.GameOver;
@@ -254,6 +257,8 @@ public sealed class GameManager : MonoBehaviour
         SetScoreMultiplier(1);
         SetActivePowerUp("Ready", 0f);
         ResetTimeControls();
+        MilestoneSystem.Instance?.ResetForRun();
+        ComboSystem.Instance?.ResetAll();
     }
 
     private void ResetTimeControls()
@@ -299,6 +304,26 @@ public sealed class GameManager : MonoBehaviour
         }
 
         runRewardsCommitted = true;
-        ProgressionManager.Instance?.AddSoftCurrency(Credits);
+        if (ProgressionManager.Instance != null)
+        {
+            ProgressionManager.Instance.AddSoftCurrency(Credits);
+            ProgressionManager.Instance.CommitRunStats(LastRunSummary);
+        }
+
+        XpLevelSystem.Instance?.AwardRunXp(LastRunSummary);
+    }
+
+    private void CommitEndOfRunSystems()
+    {
+        AchievementSystem.Instance?.CheckAfterRun(LastRunSummary);
+        LeaderboardSystem.Instance?.SubmitRun(LastRunSummary);
+        AnalyticsManager.Instance?.TrackRunEnd(LastRunSummary);
+        MonetizationV2.Instance?.AddToPiggyBank(LastRunSummary.Credits);
+        SeasonPassSystem.Instance?.AddSeasonXp(Mathf.FloorToInt(LastRunSummary.Distance * 0.3f));
+
+        int dronesKilled = ComboSystem.Instance != null ? ComboSystem.Instance.KillStreak : 0;
+        int nearMisses = ComboSystem.Instance != null ? ComboSystem.Instance.NearMissCount : 0;
+        int maxCombo = ComboSystem.Instance != null ? ComboSystem.Instance.MaxCombo : 0;
+        DailyChallengeSystem.Instance?.UpdateProgressAfterRun(LastRunSummary, dronesKilled, 0, nearMisses, maxCombo);
     }
 }

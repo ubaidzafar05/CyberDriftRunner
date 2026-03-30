@@ -185,6 +185,30 @@ public static class SceneBootstrapper
         CreateHudCanvas(player.GetComponent<PlayerController>(), camera, out HoldButton holdButton);
         holdButton.Bind(player.GetComponent<PlayerController>());
 
+        // Scene-specific gameplay systems
+        new GameObject("ScreenShake").AddComponent<ScreenShake>();
+        new GameObject("ComboSystem").AddComponent<ComboSystem>();
+        new GameObject("HapticFeedback").AddComponent<HapticFeedback>();
+        new GameObject("MilestoneSystem").AddComponent<MilestoneSystem>();
+        GameObject pauseObject = new GameObject("PauseController");
+        pauseObject.AddComponent<PauseController>();
+
+        // Scrolling ground
+        GameObject scrollingRoad = new GameObject("ScrollingGround");
+        scrollingRoad.AddComponent<ScrollingGround>();
+
+        // Dynamic music
+        GameObject musicObject = new GameObject("DynamicMusic");
+        DynamicMusicController musicController = musicObject.AddComponent<DynamicMusicController>();
+        musicController.SetupProceduralLayers();
+
+        // UI animator + tutorial
+        new GameObject("UIAnimator").AddComponent<UIAnimator>();
+        new GameObject("PerformanceAuditor").AddComponent<PerformanceAuditor>();
+
+        // Post-processing config (URP placeholder)
+        camera.gameObject.AddComponent<PostProcessingConfig>();
+
         GameObject spawnerObject = new GameObject("ObstacleSpawner");
         ObstacleSpawner spawner = spawnerObject.AddComponent<ObstacleSpawner>();
         GameObject poolsRoot = new GameObject("Pools");
@@ -276,17 +300,38 @@ public static class SceneBootstrapper
         Canvas canvas = CreateCanvas("GameOverCanvas");
         Font font = GetBuiltinFont();
 
-        CreateText(canvas.transform, font, "Run Terminated", new Vector2(0f, 240f), new Vector2(700f, 100f), 48, TextAnchor.MiddleCenter, Color.white);
-        Text scoreText = CreateText(canvas.transform, font, "Score 000000", new Vector2(0f, 120f), new Vector2(500f, 50f), 28, TextAnchor.MiddleCenter, Color.cyan);
-        Text distanceText = CreateText(canvas.transform, font, "Distance 0m", new Vector2(0f, 70f), new Vector2(500f, 50f), 28, TextAnchor.MiddleCenter, Color.cyan);
-        Text creditsText = CreateText(canvas.transform, font, "Credits 0", new Vector2(0f, 20f), new Vector2(500f, 50f), 28, TextAnchor.MiddleCenter, Color.cyan);
-        Text survivalText = CreateText(canvas.transform, font, "Survival 0.0s", new Vector2(0f, -30f), new Vector2(500f, 50f), 28, TextAnchor.MiddleCenter, Color.cyan);
-        Button retryButton = CreateButton(canvas.transform, font, "Retry", new Vector2(0f, -130f), new Vector2(220f, 70f));
-        Button menuButton = CreateButton(canvas.transform, font, "Main Menu", new Vector2(0f, -220f), new Vector2(220f, 70f));
+        CreateText(canvas.transform, font, "Run Terminated", new Vector2(0f, 340f), new Vector2(700f, 100f), 48, TextAnchor.MiddleCenter, Color.white);
+        Text scoreText = CreateText(canvas.transform, font, "Score 000000", new Vector2(0f, 220f), new Vector2(500f, 50f), 28, TextAnchor.MiddleCenter, Color.cyan);
+        Text distanceText = CreateText(canvas.transform, font, "Distance 0m", new Vector2(0f, 170f), new Vector2(500f, 50f), 28, TextAnchor.MiddleCenter, Color.cyan);
+        Text creditsText = CreateText(canvas.transform, font, "Credits 0", new Vector2(0f, 120f), new Vector2(500f, 50f), 28, TextAnchor.MiddleCenter, Color.cyan);
+        Text survivalText = CreateText(canvas.transform, font, "Survival 0.0s", new Vector2(0f, 70f), new Vector2(500f, 50f), 28, TextAnchor.MiddleCenter, Color.cyan);
+
+        // Best scores and engagement text
+        Text highScoreText = CreateText(canvas.transform, font, "Best Score 000000", new Vector2(0f, 10f), new Vector2(500f, 40f), 22, TextAnchor.MiddleCenter, new Color(0.9f, 0.7f, 0.3f));
+        Text bestDistText = CreateText(canvas.transform, font, "Best Distance 0m", new Vector2(0f, -30f), new Vector2(500f, 40f), 22, TextAnchor.MiddleCenter, new Color(0.9f, 0.7f, 0.3f));
+        Text newHighLabel = CreateText(canvas.transform, font, "★ NEW HIGH SCORE ★", new Vector2(0f, 280f), new Vector2(600f, 50f), 32, TextAnchor.MiddleCenter, new Color(1f, 0.85f, 0.15f));
+        Text nearBestText = CreateText(canvas.transform, font, "", new Vector2(0f, -70f), new Vector2(600f, 40f), 22, TextAnchor.MiddleCenter, new Color(1f, 0.5f, 0.3f));
+        Text rankText = CreateText(canvas.transform, font, "Rank #1", new Vector2(0f, -110f), new Vector2(300f, 40f), 22, TextAnchor.MiddleCenter, Color.white);
+        Text xpText = CreateText(canvas.transform, font, "+0 XP", new Vector2(0f, -150f), new Vector2(300f, 40f), 22, TextAnchor.MiddleCenter, new Color(0.3f, 1f, 0.5f));
+        Text challengeText = CreateText(canvas.transform, font, "", new Vector2(0f, -190f), new Vector2(600f, 40f), 20, TextAnchor.MiddleCenter, new Color(1f, 0.8f, 0.2f));
+
+        // Buttons
+        Button retryButton = CreateButton(canvas.transform, font, "Retry", new Vector2(0f, -270f), new Vector2(220f, 70f));
+        Button menuButton = CreateButton(canvas.transform, font, "Main Menu", new Vector2(0f, -360f), new Vector2(220f, 70f));
+        Button shareButton = CreateButton(canvas.transform, font, "Share", new Vector2(0f, -450f), new Vector2(220f, 60f));
 
         controller.Configure(scoreText, distanceText, creditsText, survivalText);
+        SetTextField(controller, "highScoreText", highScoreText);
+        SetTextField(controller, "bestDistanceText", bestDistText);
+        SetTextField(controller, "newHighScoreLabel", newHighLabel);
+        SetTextField(controller, "nearBestText", nearBestText);
+        SetTextField(controller, "leaderboardRankText", rankText);
+        SetTextField(controller, "xpGainText", xpText);
+        SetTextField(controller, "dailyChallengeText", challengeText);
+
         UnityEventTools.AddPersistentListener(retryButton.onClick, controller.Retry);
         UnityEventTools.AddPersistentListener(menuButton.onClick, controller.BackToMenu);
+        UnityEventTools.AddPersistentListener(shareButton.onClick, controller.ShareScore);
 
         EditorSceneManager.SaveScene(scene, $"{ScenesRoot}/{SceneNames.GameOver}.unity");
     }
@@ -298,6 +343,16 @@ public static class SceneBootstrapper
         new GameObject("MonetizationManager").AddComponent<MonetizationManager>();
         new GameObject("AudioManager").AddComponent<AudioManager>();
         new GameObject("MobilePerformanceManager").AddComponent<MobilePerformanceManager>();
+        new GameObject("XpLevelSystem").AddComponent<XpLevelSystem>();
+        new GameObject("DailyRewardSystem").AddComponent<DailyRewardSystem>();
+        new GameObject("DailyChallengeSystem").AddComponent<DailyChallengeSystem>();
+        new GameObject("AchievementSystem").AddComponent<AchievementSystem>();
+        new GameObject("UpgradeSystem").AddComponent<UpgradeSystem>();
+        new GameObject("LeaderboardSystem").AddComponent<LeaderboardSystem>();
+        new GameObject("SeasonPassSystem").AddComponent<SeasonPassSystem>();
+        new GameObject("MonetizationV2").AddComponent<MonetizationV2>();
+        new GameObject("AnalyticsManager").AddComponent<AnalyticsManager>();
+        new GameObject("ShareManager").AddComponent<ShareManager>();
     }
 
     private static void CreateDirectionalLight()
@@ -367,7 +422,21 @@ public static class SceneBootstrapper
         Text distanceText = CreateText(canvas.transform, font, "Distance 0m", new Vector2(150f, -80f), new Vector2(280f, 40f), 24, TextAnchor.MiddleLeft, Color.white);
         Text creditsText = CreateText(canvas.transform, font, "Credits 0", new Vector2(150f, -120f), new Vector2(280f, 40f), 24, TextAnchor.MiddleLeft, Color.white);
         Text powerUpText = CreateText(canvas.transform, font, "Ready", new Vector2(150f, -160f), new Vector2(360f, 40f), 24, TextAnchor.MiddleLeft, Color.cyan);
+        Text comboText = CreateText(canvas.transform, font, "", new Vector2(0f, 200f), new Vector2(300f, 60f), 36, TextAnchor.MiddleCenter, new Color(1f, 0.85f, 0.15f));
+        Text zoneText = CreateText(canvas.transform, font, "", new Vector2(0f, 260f), new Vector2(600f, 50f), 28, TextAnchor.MiddleCenter, new Color(0.3f, 1f, 0.5f));
+        comboText.gameObject.SetActive(false);
+        zoneText.gameObject.SetActive(false);
+
         hudController.Configure(scoreText, distanceText, creditsText, powerUpText);
+        SetTextField(hudController, "comboText", comboText);
+        SetTextField(hudController, "zoneText", zoneText);
+
+        // Pause button
+        Button pauseButton = CreateButton(canvas.transform, font, "| |", new Vector2(-60f, -40f), new Vector2(80f, 60f));
+        RectTransform pauseRect = pauseButton.GetComponent<RectTransform>();
+        pauseRect.anchorMin = new Vector2(1f, 1f);
+        pauseRect.anchorMax = new Vector2(1f, 1f);
+        pauseRect.anchoredPosition = new Vector2(-60f, -40f);
 
         GameObject hackButtonObject = new GameObject("HackButton", typeof(RectTransform), typeof(Image), typeof(HoldButton));
         hackButtonObject.transform.SetParent(canvas.transform, false);
@@ -529,6 +598,17 @@ public static class SceneBootstrapper
         SerializedObject serializedObject = new SerializedObject(target);
         serializedObject.FindProperty(propertyName).enumValueIndex = (int)powerUpType;
         serializedObject.ApplyModifiedPropertiesWithoutUndo();
+    }
+
+    private static void SetTextField(Component target, string propertyName, Text textComponent)
+    {
+        SerializedObject serializedObject = new SerializedObject(target);
+        SerializedProperty property = serializedObject.FindProperty(propertyName);
+        if (property != null)
+        {
+            property.objectReferenceValue = textComponent;
+            serializedObject.ApplyModifiedPropertiesWithoutUndo();
+        }
     }
 
     private sealed class BootstrapAssets

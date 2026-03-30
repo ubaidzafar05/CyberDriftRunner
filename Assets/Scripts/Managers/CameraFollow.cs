@@ -16,6 +16,13 @@ public sealed class CameraFollow : MonoBehaviour
         Vector3 desiredPosition = target.position + offset;
         transform.position = Vector3.Lerp(transform.position, desiredPosition, followSharpness * Time.unscaledDeltaTime);
         transform.LookAt(target.position + Vector3.up * 1.5f);
+
+        if (ScreenShake.Instance != null)
+        {
+            transform.position += ScreenShake.Instance.GetShakeOffset();
+            float roll = ScreenShake.Instance.GetShakeRotation();
+            transform.rotation *= Quaternion.Euler(0f, 0f, roll);
+        }
     }
 
     public void SetTarget(Transform newTarget)

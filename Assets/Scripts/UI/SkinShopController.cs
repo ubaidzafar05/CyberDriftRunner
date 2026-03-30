@@ -32,7 +32,12 @@ public sealed class SkinShopController : MonoBehaviour
     {
         if (creditsText != null && ProgressionManager.Instance != null)
         {
-            creditsText.text = $"Bank {ProgressionManager.Instance.SoftCurrency}";
+            int currency = ProgressionManager.Instance.SoftCurrency;
+            string next = $"Bank {currency}";
+            if (creditsText.text != next)
+            {
+                creditsText.text = next;
+            }
         }
 
         RefreshStatuses();

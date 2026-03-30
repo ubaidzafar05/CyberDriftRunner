@@ -36,7 +36,9 @@ public sealed class PowerUpSystem : MonoBehaviour
                 break;
             case PowerUpType.EmpBlast:
                 EnemyDrone.DisableAllActive(75);
-                GameManager.Instance.AddScore(30);
+                GameManager.Instance?.AddScore(30);
+                ScreenShake.Instance?.ShakeEmp();
+                HapticFeedback.Instance?.VibrateHeavy();
                 break;
         }
 

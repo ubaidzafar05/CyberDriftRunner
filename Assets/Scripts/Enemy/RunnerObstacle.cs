@@ -3,49 +3,53 @@ using UnityEngine;
 
 public sealed class RunnerObstacle : MonoBehaviour, IHackable
 {
-    public static IReadOnlyList<RunnerObstacle> ActiveObstacles => activeObstacles;
+    private static readonly List<RunnerObstacle> _activeObstaclesList = new List<RunnerObstacle>(64);
+    private static readonly HashSet<RunnerObstacle> _activeObstaclesSet = new HashSet<RunnerObstacle>();
 
-    private static readonly List<RunnerObstacle> activeObstacles = new List<RunnerObstacle>();
+    public static IReadOnlyList<RunnerObstacle> ActiveObstacles => _activeObstaclesList;
 
     [SerializeField] private int collisionDamage = 1;
     [SerializeField] private int hackReward = 25;
 
-    private bool allowMovement;
-    private float moveAmplitude;
-    private float moveFrequency;
-    private float anchorX;
-    private float phase;
-    private PooledObject pooledObject;
+    private bool _allowMovement;
+    private float _moveAmplitude;
+    private float _moveFrequency;
+    private float _anchorX;
+    private float _phase;
+    private PooledObject _pooledObject;
 
     public bool IsHackable => isActiveAndEnabled;
 
     private void Awake()
     {
-        pooledObject = GetComponent<PooledObject>();
+        _pooledObject = GetComponent<PooledObject>();
     }
 
     private void OnEnable()
     {
-        pooledObject = pooledObject == null ? GetComponent<PooledObject>() : pooledObject;
-        if (!activeObstacles.Contains(this))
+        _pooledObject = _pooledObject == null ? GetComponent<PooledObject>() : _pooledObject;
+        if (_activeObstaclesSet.Add(this))
         {
-            activeObstacles.Add(this);
+            _activeObstaclesList.Add(this);
         }
 
-        anchorX = transform.position.x;
-        phase = Random.Range(0f, 6.28f);
+        _anchorX = transform.position.x;
+        _phase = Random.Range(0f, 6.28f);
     }
 
     private void OnDisable()
     {
-        activeObstacles.Remove(this);
+        if (_activeObstaclesSet.Remove(this))
+        {
+            _activeObstaclesList.Remove(this);
+        }
     }
 
     private void Update()
     {
-        if (allowMovement)
+        if (_allowMovement)
         {
-            float x = anchorX + Mathf.Sin((Time.time * moveFrequency) + phase) * moveAmplitude;
+            float x = _anchorX + Mathf.Sin((Time.time * _moveFrequency) + _phase) * _moveAmplitude;
             transform.position = new Vector3(x, transform.position.y, transform.position.z);
         }
 
@@ -54,12 +58,12 @@ public sealed class RunnerObstacle : MonoBehaviour, IHackable
 
     public void Initialize(bool shouldMove, float amplitude, float frequency, int reward)
     {
-        allowMovement = shouldMove;
-        moveAmplitude = amplitude;
-        moveFrequency = frequency;
+        _allowMovement = shouldMove;
+        _moveAmplitude = amplitude;
+        _moveFrequency = frequency;
         hackReward = reward;
-        anchorX = transform.position.x;
-        phase = Random.Range(0f, 6.28f);
+        _anchorX = transform.position.x;
+        _phase = Random.Range(0f, 6.28f);
     }
 
     public bool TryHack()
@@ -69,7 +73,7 @@ public sealed class RunnerObstacle : MonoBehaviour, IHackable
             return false;
         }
 
-        GameManager.Instance.AddScore(hackReward);
+        GameManager.Instance?.AddScore(hackReward);
         ReturnToPool();
         return true;
     }
@@ -77,7 +81,7 @@ public sealed class RunnerObstacle : MonoBehaviour, IHackable
     public static void DisableThreatsNear(Vector3 position, float radius)
     {
         float radiusSquared = radius * radius;
-        RunnerObstacle[] snapshot = activeObstacles.ToArray();
+        RunnerObstacle[] snapshot = _activeObstaclesList.ToArray();
         for (int i = 0; i < snapshot.Length; i++)
         {
             if (snapshot[i] == null)
@@ -119,9 +123,9 @@ public sealed class RunnerObstacle : MonoBehaviour, IHackable
 
     private void ReturnToPool()
     {
-        if (pooledObject != null)
+        if (_pooledObject != null)
         {
-            pooledObject.ReturnToPool();
+            _pooledObject.ReturnToPool();
         }
         else
         {

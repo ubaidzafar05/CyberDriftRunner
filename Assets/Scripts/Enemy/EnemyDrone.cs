@@ -3,9 +3,10 @@ using UnityEngine;
 
 public sealed class EnemyDrone : MonoBehaviour, IDamageable, IHackable
 {
-    public static IReadOnlyList<EnemyDrone> ActiveDrones => activeDrones;
+    private static readonly List<EnemyDrone> _activeDronesList = new List<EnemyDrone>(64);
+    private static readonly HashSet<EnemyDrone> _activeDronesSet = new HashSet<EnemyDrone>();
 
-    private static readonly List<EnemyDrone> activeDrones = new List<EnemyDrone>();
+    public static IReadOnlyList<EnemyDrone> ActiveDrones => _activeDronesList;
 
     [SerializeField] private float backwardDriftSpeed = 4f;
     [SerializeField] private float hoverAmplitude = 0.4f;
@@ -16,43 +17,46 @@ public sealed class EnemyDrone : MonoBehaviour, IDamageable, IHackable
     [SerializeField] private int maxHealth = 1;
     [SerializeField] private int scoreReward = 40;
 
-    private bool isAlive;
-    private float attackReadyAt;
-    private float hoverSeed;
-    private float laneX;
-    private float baseHeight;
-    private int currentHealth;
-    private PooledObject pooledObject;
+    private bool _isAlive;
+    private float _attackReadyAt;
+    private float _hoverSeed;
+    private float _laneX;
+    private float _baseHeight;
+    private int _currentHealth;
+    private PooledObject _pooledObject;
 
-    public bool IsAlive => isAlive;
-    public bool IsHackable => isAlive;
+    public bool IsAlive => _isAlive;
+    public bool IsHackable => _isAlive;
 
     private void Awake()
     {
-        pooledObject = GetComponent<PooledObject>();
+        _pooledObject = GetComponent<PooledObject>();
     }
 
     private void OnEnable()
     {
-        pooledObject = pooledObject == null ? GetComponent<PooledObject>() : pooledObject;
-        if (!activeDrones.Contains(this))
+        _pooledObject = _pooledObject == null ? GetComponent<PooledObject>() : _pooledObject;
+        if (_activeDronesSet.Add(this))
         {
-            activeDrones.Add(this);
+            _activeDronesList.Add(this);
         }
 
-        isAlive = true;
-        currentHealth = maxHealth;
-        hoverSeed = Random.Range(0f, 6.28f);
+        _isAlive = true;
+        _currentHealth = maxHealth;
+        _hoverSeed = Random.Range(0f, 6.28f);
     }
 
     private void OnDisable()
     {
-        activeDrones.Remove(this);
+        if (_activeDronesSet.Remove(this))
+        {
+            _activeDronesList.Remove(this);
+        }
     }
 
     private void Update()
     {
-        if (!isAlive || GameManager.Instance == null || GameManager.Instance.Player == null)
+        if (!_isAlive || GameManager.Instance == null || GameManager.Instance.Player == null)
         {
             return;
         }
@@ -64,24 +68,24 @@ public sealed class EnemyDrone : MonoBehaviour, IDamageable, IHackable
 
     public void Initialize(float assignedLaneX, float assignedHeight, float driftSpeed, int healthValue, int reward)
     {
-        laneX = assignedLaneX;
-        baseHeight = assignedHeight;
+        _laneX = assignedLaneX;
+        _baseHeight = assignedHeight;
         backwardDriftSpeed = driftSpeed;
         maxHealth = Mathf.Max(1, healthValue);
-        currentHealth = maxHealth;
+        _currentHealth = maxHealth;
         scoreReward = reward;
-        attackReadyAt = 0f;
+        _attackReadyAt = 0f;
     }
 
     public void TakeDamage(int damage, Vector3 hitPoint)
     {
-        if (!isAlive)
+        if (!_isAlive)
         {
             return;
         }
 
-        currentHealth -= Mathf.Max(1, damage);
-        if (currentHealth <= 0)
+        _currentHealth -= Mathf.Max(1, damage);
+        if (_currentHealth <= 0)
         {
             Disable(scoreReward);
         }
@@ -89,7 +93,7 @@ public sealed class EnemyDrone : MonoBehaviour, IDamageable, IHackable
 
     public bool TryHack()
     {
-        if (!isAlive)
+        if (!_isAlive)
         {
             return false;
         }
@@ -100,10 +104,10 @@ public sealed class EnemyDrone : MonoBehaviour, IDamageable, IHackable
 
     public static void DisableAllActive(int rewardPerDrone)
     {
-        EnemyDrone[] snapshot = activeDrones.ToArray();
+        EnemyDrone[] snapshot = _activeDronesList.ToArray();
         for (int i = 0; i < snapshot.Length; i++)
         {
-            if (snapshot[i] != null && snapshot[i].isAlive)
+            if (snapshot[i] != null && snapshot[i]._isAlive)
             {
                 snapshot[i].Disable(rewardPerDrone);
             }
@@ -113,10 +117,10 @@ public sealed class EnemyDrone : MonoBehaviour, IDamageable, IHackable
     public static void DisableThreatsNear(Vector3 position, float radius)
     {
         float radiusSquared = radius * radius;
-        EnemyDrone[] snapshot = activeDrones.ToArray();
+        EnemyDrone[] snapshot = _activeDronesList.ToArray();
         for (int i = 0; i < snapshot.Length; i++)
         {
-            if (snapshot[i] == null || !snapshot[i].isAlive)
+            if (snapshot[i] == null || !snapshot[i]._isAlive)
             {
                 continue;
             }
@@ -130,9 +134,9 @@ public sealed class EnemyDrone : MonoBehaviour, IDamageable, IHackable
 
     private void MoveDrone()
     {
-        float hoverY = baseHeight + Mathf.Sin((Time.time * hoverFrequency) + hoverSeed) * hoverAmplitude;
+        float hoverY = _baseHeight + Mathf.Sin((Time.time * hoverFrequency) + _hoverSeed) * hoverAmplitude;
         Vector3 position = transform.position;
-        position.x = Mathf.Lerp(position.x, laneX, 6f * Time.deltaTime);
+        position.x = Mathf.Lerp(position.x, _laneX, 6f * Time.deltaTime);
         position.y = hoverY;
         position.z -= backwardDriftSpeed * Time.deltaTime;
         transform.position = position;
@@ -140,7 +144,7 @@ public sealed class EnemyDrone : MonoBehaviour, IDamageable, IHackable
 
     private void TryAttackPlayer()
     {
-        if (Time.time < attackReadyAt)
+        if (Time.time < _attackReadyAt)
         {
             return;
         }
@@ -151,7 +155,7 @@ public sealed class EnemyDrone : MonoBehaviour, IDamageable, IHackable
             return;
         }
 
-        attackReadyAt = Time.time + attackCooldown;
+        _attackReadyAt = Time.time + attackCooldown;
         player.TakeHit(contactDamage);
     }
 
@@ -167,16 +171,18 @@ public sealed class EnemyDrone : MonoBehaviour, IDamageable, IHackable
 
     private void Disable(int reward)
     {
-        isAlive = false;
-        GameManager.Instance.AddScore(reward);
+        _isAlive = false;
+        GameManager.Instance?.AddScore(reward);
+        ComboSystem.Instance?.RegisterKill();
+        ProgressionManager.Instance?.AddDronesDestroyed(1);
         ReturnToPool();
     }
 
     private void ReturnToPool()
     {
-        if (pooledObject != null)
+        if (_pooledObject != null)
         {
-            pooledObject.ReturnToPool();
+            _pooledObject.ReturnToPool();
         }
         else
         {

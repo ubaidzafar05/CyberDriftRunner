@@ -127,10 +127,14 @@ public sealed class PlayerController : MonoBehaviour
 
         if (powerUps != null && powerUps.ConsumeShieldIfActive())
         {
+            ScreenShake.Instance?.ShakeHit();
+            HapticFeedback.Instance?.VibrateOnHit();
             return;
         }
 
         currentHealth -= Mathf.Max(1, damage);
+        ScreenShake.Instance?.ShakeHit();
+        HapticFeedback.Instance?.VibrateOnHit();
         if (currentHealth <= 0)
         {
             Die();
@@ -261,7 +265,7 @@ public sealed class PlayerController : MonoBehaviour
 
     private void UpdateHackMode()
     {
-        GameManager.Instance.SetHackTimeScale(hackHeld, hackSlowScale);
+        GameManager.Instance?.SetHackTimeScale(hackHeld, hackSlowScale);
         vfxController?.SetHackState(hackHeld);
         if (!hackHeld || Time.unscaledTime < nextHackPulseTime)
         {
@@ -344,9 +348,12 @@ public sealed class PlayerController : MonoBehaviour
     {
         isAlive = false;
         hackHeld = false;
-        GameManager.Instance.SetHackTimeScale(false, hackSlowScale);
+        GameManager.Instance?.SetHackTimeScale(false, hackSlowScale);
         AudioManager.Instance?.PlayHit();
         vfxController?.OnHit();
-        GameManager.Instance.HandlePlayerDeath(this);
+        ScreenShake.Instance?.ShakeDeath();
+        HapticFeedback.Instance?.VibrateOnDeath();
+        ComboSystem.Instance?.ResetAll();
+        GameManager.Instance?.HandlePlayerDeath(this);
     }
 }

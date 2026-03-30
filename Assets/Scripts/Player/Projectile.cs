@@ -5,57 +5,60 @@ public sealed class Projectile : MonoBehaviour
     [SerializeField] private float hitRadius = 0.45f;
     [SerializeField] private float maxLifetime = 3f;
 
-    private int damage;
-    private float speed;
-    private float despawnAt;
-    private IDamageable target;
-    private PooledObject pooledObject;
+    private int _damage;
+    private float _speed;
+    private float _despawnAt;
+    private IDamageable _target;
+    private MonoBehaviour _targetBehaviour;
+    private PooledObject _pooledObject;
 
     private void Awake()
     {
-        pooledObject = GetComponent<PooledObject>();
+        _pooledObject = GetComponent<PooledObject>();
     }
 
     private void OnEnable()
     {
-        pooledObject = pooledObject == null ? GetComponent<PooledObject>() : pooledObject;
-        despawnAt = Time.time + maxLifetime;
+        _pooledObject = _pooledObject == null ? GetComponent<PooledObject>() : _pooledObject;
+        _despawnAt = Time.time + maxLifetime;
     }
 
     private void Update()
     {
-        if (target == null || !target.IsAlive || Time.time >= despawnAt)
+        if (_targetBehaviour == null || !_target.IsAlive || Time.time >= _despawnAt)
         {
             ReturnToPool();
             return;
         }
 
-        Transform targetTransform = ((MonoBehaviour)target).transform;
-        Vector3 nextPosition = Vector3.MoveTowards(transform.position, targetTransform.position, speed * Time.deltaTime);
+        Transform targetTransform = _targetBehaviour.transform;
+        Vector3 nextPosition = Vector3.MoveTowards(transform.position, targetTransform.position, _speed * Time.deltaTime);
         transform.position = nextPosition;
         transform.LookAt(targetTransform.position);
 
         if (Vector3.SqrMagnitude(transform.position - targetTransform.position) <= hitRadius * hitRadius)
         {
-            target.TakeDamage(damage, transform.position);
+            _target.TakeDamage(_damage, transform.position);
             ReturnToPool();
         }
     }
 
     public void Launch(IDamageable nextTarget, float projectileSpeed, int projectileDamage)
     {
-        target = nextTarget;
-        speed = projectileSpeed;
-        damage = projectileDamage;
-        despawnAt = Time.time + maxLifetime;
+        _target = nextTarget;
+        _targetBehaviour = nextTarget as MonoBehaviour;
+        _speed = projectileSpeed;
+        _damage = projectileDamage;
+        _despawnAt = Time.time + maxLifetime;
     }
 
     private void ReturnToPool()
     {
-        target = null;
-        if (pooledObject != null)
+        _target = null;
+        _targetBehaviour = null;
+        if (_pooledObject != null)
         {
-            pooledObject.ReturnToPool();
+            _pooledObject.ReturnToPool();
         }
         else
         {

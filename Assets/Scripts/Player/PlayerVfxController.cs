@@ -2,16 +2,28 @@ using UnityEngine;
 
 public sealed class PlayerVfxController : MonoBehaviour
 {
+    [Header("References")]
     [SerializeField] private Renderer targetRenderer;
     [SerializeField] private TrailRenderer trailRenderer;
+    [SerializeField] private Material trailMaterial;
 
-    private Material runtimeMaterial;
+    private const int BurstPoolSize = 4;
+
+    private Material _runtimeMaterial;
+    private ParticleSystem[] _burstPool;
+    private int _burstIndex;
 
     private void Awake()
     {
         targetRenderer = targetRenderer == null ? GetComponentInChildren<Renderer>() : targetRenderer;
         trailRenderer = trailRenderer == null ? CreateTrail() : trailRenderer;
-        runtimeMaterial = targetRenderer != null ? targetRenderer.material : null;
+        _runtimeMaterial = targetRenderer != null ? targetRenderer.material : null;
+        _burstPool = new ParticleSystem[BurstPoolSize];
+        for (int i = 0; i < BurstPoolSize; i++)
+        {
+            _burstPool[i] = CreatePooledBurst(i);
+        }
+
         SetHackState(false);
     }
 
@@ -32,10 +44,10 @@ public sealed class PlayerVfxController : MonoBehaviour
             trailRenderer.endColor = active ? new Color(1f, 0.2f, 1f, 0f) : new Color(0.2f, 1f, 1f, 0f);
         }
 
-        if (runtimeMaterial != null && runtimeMaterial.HasProperty("_EmissionColor"))
+        if (_runtimeMaterial != null && _runtimeMaterial.HasProperty("_EmissionColor"))
         {
-            runtimeMaterial.EnableKeyword("_EMISSION");
-            runtimeMaterial.SetColor("_EmissionColor", active ? new Color(0.4f, 1.2f, 1.2f) : new Color(0.18f, 0.8f, 1f));
+            _runtimeMaterial.EnableKeyword("_EMISSION");
+            _runtimeMaterial.SetColor("_EmissionColor", active ? new Color(0.4f, 1.2f, 1.2f) : new Color(0.18f, 0.8f, 1f));
         }
     }
 
@@ -49,14 +61,23 @@ public sealed class PlayerVfxController : MonoBehaviour
         trail.time = 0.08f;
         trail.startWidth = 0.45f;
         trail.endWidth = 0.05f;
-        trail.material = new Material(Shader.Find("Sprites/Default"));
+
+        if (trailMaterial != null)
+        {
+            trail.material = trailMaterial;
+        }
+        else
+        {
+            trail.material = new Material(Shader.Find("Sprites/Default") ?? Shader.Find("UI/Default"));
+        }
+
         trail.emitting = false;
         return trail;
     }
 
-    private void EmitBurst(Color color, int particles)
+    private ParticleSystem CreatePooledBurst(int index)
     {
-        GameObject burstObject = new GameObject("Burst");
+        GameObject burstObject = new GameObject($"BurstPool_{index}");
         burstObject.transform.SetParent(transform, false);
         burstObject.transform.localPosition = Vector3.up;
 
@@ -66,9 +87,10 @@ public sealed class PlayerVfxController : MonoBehaviour
         main.startLifetime = 0.25f;
         main.startSpeed = 2.6f;
         main.startSize = 0.12f;
-        main.startColor = color;
-        main.maxParticles = particles;
+        main.startColor = Color.white;
+        main.maxParticles = 32;
         main.loop = false;
+        main.playOnAwake = false;
 
         var emission = system.emission;
         emission.rateOverTime = 0f;
@@ -77,7 +99,27 @@ public sealed class PlayerVfxController : MonoBehaviour
         shape.shapeType = ParticleSystemShapeType.Sphere;
         shape.radius = 0.2f;
 
+        var renderer = burstObject.GetComponent<ParticleSystemRenderer>();
+        renderer.material = new Material(Shader.Find("Particles/Standard Unlit") ?? Shader.Find("Sprites/Default") ?? Shader.Find("UI/Default"));
+
+        system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        return system;
+    }
+
+    private void EmitBurst(Color color, int particles)
+    {
+        if (_burstPool == null || _burstPool.Length == 0)
+        {
+            return;
+        }
+
+        ParticleSystem system = _burstPool[_burstIndex];
+        _burstIndex = (_burstIndex + 1) % _burstPool.Length;
+
+        system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+        var main = system.main;
+        main.startColor = color;
+        main.maxParticles = particles;
         system.Emit(particles);
-        Object.Destroy(burstObject, 1f);
     }
 }

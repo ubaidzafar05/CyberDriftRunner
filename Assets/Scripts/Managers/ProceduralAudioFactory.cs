@@ -78,9 +78,22 @@ public static class ProceduralAudioFactory
 
     private static AudioClip CreateClip(string clipName, float[] samples, bool loop)
     {
-        AudioClip clip = AudioClip.Create(clipName, samples.Length, 1, SampleRate, false);
-        clip.SetData(samples, 0);
-        clip.wrapMode = loop ? AudioWrapMode.Loop : AudioWrapMode.Default;
-        return clip;
+        if (loop)
+        {
+            // Duplicate the data so seamless looping works without wrapMode
+            int loopCount = 4;
+            float[] looped = new float[samples.Length * loopCount];
+            for (int r = 0; r < loopCount; r++)
+                System.Array.Copy(samples, 0, looped, r * samples.Length, samples.Length);
+            AudioClip clip = AudioClip.Create(clipName, looped.Length, 1, SampleRate, false);
+            clip.SetData(looped, 0);
+            return clip;
+        }
+        else
+        {
+            AudioClip clip = AudioClip.Create(clipName, samples.Length, 1, SampleRate, false);
+            clip.SetData(samples, 0);
+            return clip;
+        }
     }
 }

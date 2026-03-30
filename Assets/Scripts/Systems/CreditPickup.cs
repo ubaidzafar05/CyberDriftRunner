@@ -7,24 +7,31 @@ public sealed class CreditPickup : MonoBehaviour
     [SerializeField] private float floatHeight = 0.35f;
     [SerializeField] private float floatSpeed = 3f;
 
-    private PooledObject pooledObject;
-    private Vector3 startPosition;
+    private PooledObject _pooledObject;
+    private float _baseY;
+    private bool _baseYSet;
 
     private void Awake()
     {
-        pooledObject = GetComponent<PooledObject>();
+        _pooledObject = GetComponent<PooledObject>();
     }
 
     private void OnEnable()
     {
-        pooledObject = pooledObject == null ? GetComponent<PooledObject>() : pooledObject;
-        startPosition = transform.position;
+        _pooledObject = _pooledObject == null ? GetComponent<PooledObject>() : _pooledObject;
+        _baseYSet = false;
     }
 
     private void Update()
     {
+        if (!_baseYSet)
+        {
+            _baseY = transform.position.y;
+            _baseYSet = true;
+        }
+
         float bobOffset = Mathf.Sin(Time.time * floatSpeed) * floatHeight;
-        transform.position = new Vector3(transform.position.x, startPosition.y + bobOffset, transform.position.z);
+        transform.position = new Vector3(transform.position.x, _baseY + bobOffset, transform.position.z);
         ReturnWhenBehindPlayer();
     }
 
@@ -35,8 +42,10 @@ public sealed class CreditPickup : MonoBehaviour
             return;
         }
 
-        GameManager.Instance.AddCredits(creditValue);
-        GameManager.Instance.AddScore(scoreBonus);
+        GameManager.Instance?.AddCredits(creditValue);
+        GameManager.Instance?.AddScore(scoreBonus);
+        ComboSystem.Instance?.RegisterPickup();
+        HapticFeedback.Instance?.VibrateOnCollect();
         ReturnToPool();
     }
 
@@ -55,9 +64,9 @@ public sealed class CreditPickup : MonoBehaviour
 
     private void ReturnToPool()
     {
-        if (pooledObject != null)
+        if (_pooledObject != null)
         {
-            pooledObject.ReturnToPool();
+            _pooledObject.ReturnToPool();
         }
         else
         {

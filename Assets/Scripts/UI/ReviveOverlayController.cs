@@ -8,6 +8,8 @@ public sealed class ReviveOverlayController : MonoBehaviour
     [SerializeField] private Button watchAdButton;
     [SerializeField] private Button skipButton;
 
+    private bool _listenersAttached;
+
     public void Configure(GameObject targetPanel, Text targetText, Button watchButton, Button declineButton)
     {
         panel = targetPanel;
@@ -19,8 +21,17 @@ public sealed class ReviveOverlayController : MonoBehaviour
     private void Start()
     {
         SetVisible(false);
-        watchAdButton.onClick.AddListener(WatchAd);
-        skipButton.onClick.AddListener(Skip);
+        AttachListeners();
+    }
+
+    private void OnEnable()
+    {
+        AttachListeners();
+    }
+
+    private void OnDisable()
+    {
+        DetachListeners();
     }
 
     private void Update()
@@ -33,14 +44,54 @@ public sealed class ReviveOverlayController : MonoBehaviour
         }
     }
 
+    private void AttachListeners()
+    {
+        if (_listenersAttached)
+        {
+            return;
+        }
+
+        if (watchAdButton != null)
+        {
+            watchAdButton.onClick.AddListener(WatchAd);
+        }
+
+        if (skipButton != null)
+        {
+            skipButton.onClick.AddListener(Skip);
+        }
+
+        _listenersAttached = true;
+    }
+
+    private void DetachListeners()
+    {
+        if (!_listenersAttached)
+        {
+            return;
+        }
+
+        if (watchAdButton != null)
+        {
+            watchAdButton.onClick.RemoveListener(WatchAd);
+        }
+
+        if (skipButton != null)
+        {
+            skipButton.onClick.RemoveListener(Skip);
+        }
+
+        _listenersAttached = false;
+    }
+
     private void WatchAd()
     {
-        GameManager.Instance.AcceptReviveOffer();
+        GameManager.Instance?.AcceptReviveOffer();
     }
 
     private void Skip()
     {
-        GameManager.Instance.DeclineReviveOffer();
+        GameManager.Instance?.DeclineReviveOffer();
     }
 
     private void SetVisible(bool visible)
