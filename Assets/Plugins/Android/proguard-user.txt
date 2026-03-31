@@ -1,0 +1,45 @@
+# Cyber Drift Runner — ProGuard Rules for Release Builds
+# These rules prevent obfuscation of classes needed by Unity, Google, and ads SDKs.
+
+# Keep Unity engine classes
+-keep class com.unity3d.** { *; }
+-keep class com.unity.** { *; }
+
+# Keep Google Play Games SDK
+-keep class com.google.android.gms.** { *; }
+-keep class com.google.games.** { *; }
+
+# Keep Google Mobile Ads (AdMob)
+-keep class com.google.android.gms.ads.** { *; }
+-keep class com.google.ads.** { *; }
+
+# Keep Firebase Crashlytics (if added later)
+-keep class com.google.firebase.** { *; }
+
+# Keep Unity Ads
+-keep class com.unity3d.services.** { *; }
+-keep class com.unity3d.ads.** { *; }
+
+# Keep Android support / AndroidX
+-keep class androidx.** { *; }
+-keep class android.support.** { *; }
+
+# Prevent stripping of native methods
+-keepclassmembers class * {
+    native <methods>;
+}
+
+# Keep serializable classes (for JSON parsing)
+-keepclassmembers class * implements java.io.Serializable {
+    static final long serialVersionUID;
+    private static final java.io.ObjectStreamField[] serialPersistentFields;
+    private void writeObject(java.io.ObjectOutputStream);
+    private void readObject(java.io.ObjectInputStream);
+    java.lang.Object writeReplace();
+    java.lang.Object readResolve();
+}
+
+# Don't warn about missing optional dependencies
+-dontwarn com.google.**
+-dontwarn com.unity3d.**
+-dontwarn androidx.**
