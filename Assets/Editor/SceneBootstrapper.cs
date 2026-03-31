@@ -54,7 +54,9 @@ public static class SceneBootstrapper
             CreatePowerUpPrefab("ShieldPowerUp", PrimitiveType.Capsule, neonBlue, PowerUpType.Shield, 6f),
             CreatePowerUpPrefab("DoubleScorePowerUp", PrimitiveType.Cube, neonPink, PowerUpType.DoubleScore, 8f),
             CreatePowerUpPrefab("SlowMotionPowerUp", PrimitiveType.Sphere, neonYellow, PowerUpType.SlowMotion, 5f),
-            CreatePowerUpPrefab("EmpPowerUp", PrimitiveType.Cylinder, neonPink, PowerUpType.EmpBlast, 0f)
+            CreatePowerUpPrefab("EmpPowerUp", PrimitiveType.Cylinder, neonPink, PowerUpType.EmpBlast, 0f),
+            CreatePowerUpPrefab("MagnetPowerUp", PrimitiveType.Sphere, neonBlue, PowerUpType.Magnet, 7f),
+            CreatePowerUpPrefab("SpeedBoostPowerUp", PrimitiveType.Capsule, neonYellow, PowerUpType.SpeedBoost, 5f)
         };
 
         assets.RoadMaterial = roadMaterial;
@@ -182,8 +184,6 @@ public static class SceneBootstrapper
         player.transform.position = new Vector3(0f, 0.2f, 0f);
 
         Camera camera = CreateCamera(player.transform);
-        CreateHudCanvas(player.GetComponent<PlayerController>(), camera, out HoldButton holdButton);
-        holdButton.Bind(player.GetComponent<PlayerController>());
 
         // Scene-specific gameplay systems
         new GameObject("ScreenShake").AddComponent<ScreenShake>();
@@ -192,7 +192,10 @@ public static class SceneBootstrapper
         new GameObject("MilestoneSystem").AddComponent<MilestoneSystem>();
         new GameObject("FeverMode").AddComponent<FeverMode>();
         GameObject pauseObject = new GameObject("PauseController");
-        pauseObject.AddComponent<PauseController>();
+        PauseController pauseCtrl = pauseObject.AddComponent<PauseController>();
+
+        CreateHudCanvas(player.GetComponent<PlayerController>(), camera, pauseCtrl, out HoldButton holdButton);
+        holdButton.Bind(player.GetComponent<PlayerController>());
 
         // Magnet field on player
         player.AddComponent<MagnetField>();
@@ -445,7 +448,7 @@ public static class SceneBootstrapper
         return camera;
     }
 
-    private static void CreateHudCanvas(PlayerController player, Camera camera, out HoldButton holdButton)
+    private static void CreateHudCanvas(PlayerController player, Camera camera, PauseController pauseCtrl, out HoldButton holdButton)
     {
         Canvas canvas = CreateCanvas("HUDCanvas");
         canvas.worldCamera = camera;
@@ -475,6 +478,14 @@ public static class SceneBootstrapper
         pauseRect.anchorMax = new Vector2(1f, 1f);
         pauseRect.anchoredPosition = new Vector2(-60f, -40f);
 
+        // Pause panel
+        GameObject pausePanel = CreatePanel(canvas.transform, "PausePanel", Vector2.zero, new Vector2(500f, 400f));
+        CreateText(pausePanel.transform, font, "PAUSED", new Vector2(0f, 140f), new Vector2(300f, 60f), 42, TextAnchor.MiddleCenter, Color.cyan);
+        Button resumeBtn = CreateButton(pausePanel.transform, font, "Resume", new Vector2(0f, 30f), new Vector2(260f, 70f));
+        Button quitBtn = CreateButton(pausePanel.transform, font, "Quit to Menu", new Vector2(0f, -70f), new Vector2(260f, 70f));
+        pausePanel.SetActive(false);
+        pauseCtrl.Configure(pausePanel, pauseButton, resumeBtn, quitBtn);
+
         GameObject hackButtonObject = new GameObject("HackButton", typeof(RectTransform), typeof(Image), typeof(HoldButton));
         hackButtonObject.transform.SetParent(canvas.transform, false);
         RectTransform rect = hackButtonObject.GetComponent<RectTransform>();
@@ -489,6 +500,7 @@ public static class SceneBootstrapper
         holdButton.Bind(player);
 
         CreateText(hackButtonObject.transform, font, "HACK", Vector2.zero, new Vector2(140f, 40f), 28, TextAnchor.MiddleCenter, Color.black);
+        CreateTutorialOverlay(canvas.transform, font);
         CreateReviveOverlay(canvas.transform, font);
     }
 
@@ -502,6 +514,22 @@ public static class SceneBootstrapper
         Button skipButton = CreateButton(panel.transform, font, "Skip", new Vector2(0f, -100f), new Vector2(220f, 60f));
         overlay.Configure(panel, statusText, watchButton, skipButton);
         panel.SetActive(false);
+    }
+
+    private static void CreateTutorialOverlay(Transform canvasTransform, Font font)
+    {
+        GameObject panel = CreatePanel(canvasTransform, "TutorialPanel", Vector2.zero, new Vector2(900f, 500f));
+        Image panelBg = panel.GetComponent<Image>();
+        if (panelBg != null) panelBg.color = new Color(0.02f, 0.02f, 0.08f, 0.92f);
+
+        CreateText(panel.transform, font, "HOW TO PLAY", new Vector2(0f, 180f), new Vector2(500f, 50f), 36, TextAnchor.MiddleCenter, Color.cyan);
+        Text instructionText = CreateText(panel.transform, font, "", new Vector2(0f, 20f), new Vector2(700f, 200f), 30, TextAnchor.MiddleCenter, Color.white);
+        Button dismissButton = CreateButton(panel.transform, font, "Next ▶", new Vector2(0f, -180f), new Vector2(220f, 70f));
+
+        TutorialOverlay tutorial = panel.AddComponent<TutorialOverlay>();
+        SetSerializedField(tutorial, "overlayRoot", panel);
+        SetSerializedField(tutorial, "instructionText", instructionText);
+        SetSerializedField(tutorial, "dismissButton", dismissButton);
     }
 
     private static EventSystem CreateEventSystem()
@@ -644,6 +672,17 @@ public static class SceneBootstrapper
         if (property != null)
         {
             property.objectReferenceValue = textComponent;
+            serializedObject.ApplyModifiedPropertiesWithoutUndo();
+        }
+    }
+
+    private static void SetSerializedField(Component target, string propertyName, Object value)
+    {
+        SerializedObject serializedObject = new SerializedObject(target);
+        SerializedProperty property = serializedObject.FindProperty(propertyName);
+        if (property != null)
+        {
+            property.objectReferenceValue = value;
             serializedObject.ApplyModifiedPropertiesWithoutUndo();
         }
     }
