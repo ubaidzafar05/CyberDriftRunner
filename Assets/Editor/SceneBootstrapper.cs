@@ -191,6 +191,7 @@ public static class SceneBootstrapper
         new GameObject("HapticFeedback").AddComponent<HapticFeedback>();
         new GameObject("MilestoneSystem").AddComponent<MilestoneSystem>();
         new GameObject("FeverMode").AddComponent<FeverMode>();
+        new GameObject("NearMissDetector").AddComponent<NearMissDetector>();
         GameObject pauseObject = new GameObject("PauseController");
         PauseController pauseCtrl = pauseObject.AddComponent<PauseController>();
 
@@ -313,6 +314,42 @@ public static class SceneBootstrapper
         UnityEventTools.AddPersistentListener(soundButton.onClick, controller.ToggleSound);
         UnityEventTools.AddPersistentListener(vibrationButton.onClick, controller.ToggleVibration);
         UnityEventTools.AddPersistentListener(closeButton.onClick, controller.ToggleSettings);
+
+        // Upgrade Shop panel
+        GameObject upgradePanel = CreatePanel(canvas.transform, "UpgradeShopPanel", new Vector2(0f, 20f), new Vector2(640f, 640f));
+        Text upgradeCurrencyText = CreateText(upgradePanel.transform, font, "Credits: 0", new Vector2(0f, 280f), new Vector2(300f, 40f), 24, TextAnchor.MiddleCenter, Color.yellow);
+        CreateText(upgradePanel.transform, font, "UPGRADES", new Vector2(0f, 240f), new Vector2(300f, 50f), 32, TextAnchor.MiddleCenter, Color.cyan);
+        GameObject upgradeContent = new GameObject("UpgradeContent", typeof(RectTransform));
+        upgradeContent.transform.SetParent(upgradePanel.transform, false);
+        RectTransform upgradeContentRect = upgradeContent.GetComponent<RectTransform>();
+        upgradeContentRect.anchorMin = new Vector2(0.5f, 1f);
+        upgradeContentRect.anchorMax = new Vector2(0.5f, 1f);
+        upgradeContentRect.anchoredPosition = new Vector2(0f, -40f);
+        upgradeContentRect.sizeDelta = new Vector2(600f, 550f);
+        UpgradeShopController upgradeShop = upgradePanel.AddComponent<UpgradeShopController>();
+        upgradeShop.Configure(upgradePanel, upgradeContentRect, upgradeCurrencyText, font);
+        Button upgradeCloseBtn = CreateButton(upgradePanel.transform, font, "Close", new Vector2(0f, -290f), new Vector2(180f, 50f));
+        UnityEventTools.AddPersistentListener(upgradeCloseBtn.onClick, upgradeShop.TogglePanel);
+        upgradePanel.SetActive(false);
+
+        Button upgradesButton = CreateButton(canvas.transform, font, "Upgrades", new Vector2(0f, -120f), new Vector2(260f, 60f));
+        // Shift existing buttons down to make room
+        settingsButton.GetComponent<RectTransform>().anchoredPosition = new Vector2(0f, -200f);
+        quitButton.GetComponent<RectTransform>().anchoredPosition = new Vector2(0f, -280f);
+        UnityEventTools.AddPersistentListener(upgradesButton.onClick, upgradeShop.TogglePanel);
+
+        // Starter pack offer (hidden until triggered after 3rd run)
+        GameObject starterRoot = new GameObject("StarterPackOffer");
+        starterRoot.transform.SetParent(canvas.transform, false);
+        StarterPackOffer starterPack = starterRoot.AddComponent<StarterPackOffer>();
+        GameObject starterPanel = CreatePanel(canvas.transform, "StarterPackPanel", Vector2.zero, new Vector2(500f, 400f));
+        Text starterTitle = CreateText(starterPanel.transform, font, "STARTER PACK", new Vector2(0f, 150f), new Vector2(400f, 50f), 36, TextAnchor.MiddleCenter, Color.yellow);
+        Text starterDesc = CreateText(starterPanel.transform, font, "", new Vector2(0f, 40f), new Vector2(380f, 100f), 20, TextAnchor.MiddleCenter, Color.white);
+        Text starterPrice = CreateText(starterPanel.transform, font, "$0.99", new Vector2(0f, -40f), new Vector2(200f, 40f), 28, TextAnchor.MiddleCenter, Color.green);
+        Button starterBuy = CreateButton(starterPanel.transform, font, "BUY NOW", new Vector2(-80f, -120f), new Vector2(160f, 60f));
+        Button starterDismiss = CreateButton(starterPanel.transform, font, "No Thanks", new Vector2(80f, -120f), new Vector2(160f, 60f));
+        starterPack.Configure(starterPanel, starterTitle, starterDesc, starterPrice, starterBuy, starterDismiss);
+        starterPanel.SetActive(false);
 
         EditorSceneManager.SaveScene(scene, $"{ScenesRoot}/{SceneNames.MainMenu}.unity");
     }
@@ -502,6 +539,25 @@ public static class SceneBootstrapper
         CreateText(hackButtonObject.transform, font, "HACK", Vector2.zero, new Vector2(140f, 40f), 28, TextAnchor.MiddleCenter, Color.black);
         CreateTutorialOverlay(canvas.transform, font);
         CreateReviveOverlay(canvas.transform, font);
+        CreateScreenFlash(canvas.transform);
+    }
+
+    private static void CreateScreenFlash(Transform canvasTransform)
+    {
+        GameObject flashObj = new GameObject("ScreenFlash", typeof(RectTransform), typeof(UnityEngine.UI.Image));
+        flashObj.transform.SetParent(canvasTransform, false);
+        RectTransform rt = flashObj.GetComponent<RectTransform>();
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.one;
+        rt.offsetMin = Vector2.zero;
+        rt.offsetMax = Vector2.zero;
+
+        UnityEngine.UI.Image img = flashObj.GetComponent<UnityEngine.UI.Image>();
+        img.color = Color.clear;
+        img.raycastTarget = false;
+
+        ScreenFlash flash = flashObj.AddComponent<ScreenFlash>();
+        flash.SetFlashImage(img);
     }
 
     private static void CreateReviveOverlay(Transform canvasTransform, Font font)
