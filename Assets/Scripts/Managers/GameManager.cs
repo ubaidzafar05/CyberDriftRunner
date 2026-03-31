@@ -50,6 +50,8 @@ public sealed class GameManager : MonoBehaviour
         get
         {
             float speed = Mathf.Min(baseForwardSpeed + (SurvivalTime * speedGainPerSecond), maxForwardSpeed);
+            if (UpgradeSystem.Instance != null)
+                speed *= UpgradeSystem.Instance.GetMultiplier(UpgradeSystem.UpgradeType.BaseSpeed);
             if (Player != null && Player.PowerUps != null && Player.PowerUps.HasSpeedBoost)
                 speed *= Player.PowerUps.SpeedBoostMultiplier;
             return speed;
@@ -194,6 +196,7 @@ public sealed class GameManager : MonoBehaviour
         ResetTimeControls();
         State = GameState.GameOver;
         RateAppPrompt.Instance?.RecordSession();
+        StarterPackOffer.Instance?.TryShowAfterRun();
         LoadSceneSafe(SceneNames.GameOver);
     }
 
@@ -270,6 +273,7 @@ public sealed class GameManager : MonoBehaviour
         MilestoneSystem.Instance?.ResetForRun();
         ComboSystem.Instance?.ResetAll();
         FeverMode.Instance?.ResetForRun();
+        NearMissDetector.Instance?.ResetForRun();
     }
 
     private void ResetTimeControls()
@@ -335,7 +339,7 @@ public sealed class GameManager : MonoBehaviour
         NotificationScheduler.Instance?.RecordPlaySession();
 
         int dronesKilled = ComboSystem.Instance != null ? ComboSystem.Instance.KillStreak : 0;
-        int nearMisses = ComboSystem.Instance != null ? ComboSystem.Instance.NearMissCount : 0;
+        int nearMisses = NearMissDetector.Instance != null ? NearMissDetector.Instance.NearMissCount : 0;
         int maxCombo = ComboSystem.Instance != null ? ComboSystem.Instance.MaxCombo : 0;
         DailyChallengeSystem.Instance?.UpdateProgressAfterRun(LastRunSummary, dronesKilled, 0, nearMisses, maxCombo);
     }

@@ -53,8 +53,13 @@ public sealed class HUDController : MonoBehaviour
         int score = GameManager.Instance.Score;
         if (score != _cachedScore)
         {
+            bool bigScoreChange = score - _cachedScore >= 40;
             _cachedScore = score;
             scoreText.text = $"Score {score:000000}";
+            if (bigScoreChange && UIAnimator.Instance != null)
+            {
+                UIAnimator.Instance.PunchScale(scoreText.transform, 1.2f, 0.15f);
+            }
         }
 
         int distance = Mathf.FloorToInt(GameManager.Instance.Distance);

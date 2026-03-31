@@ -93,6 +93,7 @@ public sealed class PlayerController : MonoBehaviour
         EnemyDrone.DisableThreatsNear(transform.position, 8f);
         RunnerObstacle.DisableThreatsNear(transform.position, 8f);
         vfxController?.OnRevive();
+        ScreenFlash.Instance?.FlashRevive();
     }
 
     private void Update()
@@ -136,6 +137,7 @@ public sealed class PlayerController : MonoBehaviour
         currentHealth -= Mathf.Max(1, damage);
         ScreenShake.Instance?.ShakeHit();
         HapticFeedback.Instance?.VibrateOnHit();
+        ScreenFlash.Instance?.FlashHit();
         if (currentHealth <= 0)
         {
             Die();
@@ -229,7 +231,10 @@ public sealed class PlayerController : MonoBehaviour
             return;
         }
 
-        verticalVelocity = jumpForce;
+        float actualJumpForce = jumpForce;
+        if (UpgradeSystem.Instance != null)
+            actualJumpForce *= UpgradeSystem.Instance.GetMultiplier(UpgradeSystem.UpgradeType.JumpHeight);
+        verticalVelocity = actualJumpForce;
         AudioManager.Instance?.PlayJump();
         vfxController?.OnJump();
     }
@@ -329,8 +334,12 @@ public sealed class PlayerController : MonoBehaviour
 
     private void TryHackNearestThreat()
     {
+        float actualHackRange = hackRange;
+        if (UpgradeSystem.Instance != null)
+            actualHackRange *= UpgradeSystem.Instance.GetMultiplier(UpgradeSystem.UpgradeType.HackRange);
+
         IHackable bestTarget = null;
-        float bestDistance = hackRange * hackRange;
+        float bestDistance = actualHackRange * actualHackRange;
         Vector3 origin = transform.position;
 
         bestTarget = GetClosestHackable(EnemyDrone.ActiveDrones, origin, bestDistance, ref bestDistance);
@@ -392,6 +401,7 @@ public sealed class PlayerController : MonoBehaviour
         vfxController?.OnHit();
         ScreenShake.Instance?.ShakeDeath();
         HapticFeedback.Instance?.VibrateOnDeath();
+        ScreenFlash.Instance?.FlashDeath();
         ComboSystem.Instance?.ResetAll();
         StartCoroutine(DeathSequence());
     }
