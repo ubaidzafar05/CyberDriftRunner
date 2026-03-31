@@ -68,7 +68,10 @@ public sealed class PlayerVfxController : MonoBehaviour
         }
         else
         {
-            trail.material = new Material(Shader.Find("Sprites/Default") ?? Shader.Find("UI/Default"));
+            Shader fallbackShader = Shader.Find("Sprites/Default");
+            if (fallbackShader == null) fallbackShader = Shader.Find("UI/Default");
+            if (fallbackShader == null) fallbackShader = Shader.Find("Hidden/InternalErrorShader");
+            trail.material = new Material(fallbackShader);
         }
 
         trail.emitting = false;
@@ -100,7 +103,10 @@ public sealed class PlayerVfxController : MonoBehaviour
         shape.radius = 0.2f;
 
         var renderer = burstObject.GetComponent<ParticleSystemRenderer>();
-        renderer.material = new Material(Shader.Find("Particles/Standard Unlit") ?? Shader.Find("Sprites/Default") ?? Shader.Find("UI/Default"));
+        Shader particleShader = Shader.Find("Particles/Standard Unlit");
+        if (particleShader == null) particleShader = Shader.Find("Sprites/Default");
+        if (particleShader == null) particleShader = Shader.Find("Hidden/InternalErrorShader");
+        renderer.material = new Material(particleShader);
 
         system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         return system;

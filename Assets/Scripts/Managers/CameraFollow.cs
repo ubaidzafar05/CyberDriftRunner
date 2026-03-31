@@ -13,6 +13,12 @@ public sealed class CameraFollow : MonoBehaviour
             return;
         }
 
+        // Skip camera movement when fully paused (revive/pause overlay)
+        if (Time.timeScale <= 0f)
+        {
+            return;
+        }
+
         Vector3 desiredPosition = target.position + offset;
         transform.position = Vector3.Lerp(transform.position, desiredPosition, followSharpness * Time.unscaledDeltaTime);
         transform.LookAt(target.position + Vector3.up * 1.5f);

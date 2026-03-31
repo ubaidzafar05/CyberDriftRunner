@@ -14,9 +14,13 @@ public sealed class PowerUpPickup : MonoBehaviour
         pooledObject = GetComponent<PooledObject>();
     }
 
-    private void Update()
+    private void OnEnable()
     {
         pooledObject = pooledObject == null ? GetComponent<PooledObject>() : pooledObject;
+    }
+
+    private void Update()
+    {
         transform.Rotate(Vector3.up, spinSpeed * Time.deltaTime, Space.World);
         ReturnWhenBehindPlayer();
     }
@@ -33,6 +37,7 @@ public sealed class PowerUpPickup : MonoBehaviour
         GameManager.Instance?.AddScore(scoreBonus);
         AudioManager.Instance?.PlayPowerUp();
         player.GetComponent<PlayerVfxController>()?.OnPowerUp();
+        ScreenFlash.Instance?.FlashPowerUp();
         ReturnToPool();
     }
 
