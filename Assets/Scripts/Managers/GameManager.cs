@@ -45,7 +45,16 @@ public sealed class GameManager : MonoBehaviour
     public int Credits { get; private set; }
     public float Distance { get; private set; }
     public float SurvivalTime { get; private set; }
-    public float CurrentForwardSpeed => Mathf.Min(baseForwardSpeed + (SurvivalTime * speedGainPerSecond), maxForwardSpeed);
+    public float CurrentForwardSpeed
+    {
+        get
+        {
+            float speed = Mathf.Min(baseForwardSpeed + (SurvivalTime * speedGainPerSecond), maxForwardSpeed);
+            if (Player != null && Player.PowerUps != null && Player.PowerUps.HasSpeedBoost)
+                speed *= Player.PowerUps.SpeedBoostMultiplier;
+            return speed;
+        }
+    }
     public int ScoreMultiplier => scoreMultiplier;
     public string ActivePowerUpLabel { get; private set; } = "Ready";
     public float ActivePowerUpTimeLeft { get; private set; }

@@ -3,5 +3,7 @@ public enum PowerUpType
     Shield,
     DoubleScore,
     SlowMotion,
-    EmpBlast
+    EmpBlast,
+    Magnet,
+    SpeedBoost
 }

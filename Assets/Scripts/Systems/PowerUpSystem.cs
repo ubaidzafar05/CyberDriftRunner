@@ -3,12 +3,17 @@ using UnityEngine;
 public sealed class PowerUpSystem : MonoBehaviour
 {
     [SerializeField] private float slowMotionScale = 0.65f;
+    [SerializeField] private float speedBoostMultiplier = 1.5f;
 
     private float shieldTimeLeft;
     private float doubleScoreTimeLeft;
     private float slowMotionTimeLeft;
+    private float magnetTimeLeft;
+    private float speedBoostTimeLeft;
 
     public bool HasShield => shieldTimeLeft > 0f;
+    public bool HasSpeedBoost => speedBoostTimeLeft > 0f;
+    public float SpeedBoostMultiplier => HasSpeedBoost ? speedBoostMultiplier : 1f;
 
     private void Update()
     {
@@ -40,6 +45,14 @@ public sealed class PowerUpSystem : MonoBehaviour
                 ScreenShake.Instance?.ShakeEmp();
                 HapticFeedback.Instance?.VibrateHeavy();
                 break;
+            case PowerUpType.Magnet:
+                magnetTimeLeft = Mathf.Max(magnetTimeLeft, duration);
+                MagnetField magnet = GameManager.Instance?.Player?.GetComponent<MagnetField>();
+                if (magnet != null) magnet.Activate(duration);
+                break;
+            case PowerUpType.SpeedBoost:
+                speedBoostTimeLeft = Mathf.Max(speedBoostTimeLeft, duration);
+                break;
         }
 
         RefreshGameManagerState();
@@ -62,6 +75,8 @@ public sealed class PowerUpSystem : MonoBehaviour
         shieldTimeLeft = Mathf.Max(0f, shieldTimeLeft - deltaTime);
         doubleScoreTimeLeft = Mathf.Max(0f, doubleScoreTimeLeft - deltaTime);
         slowMotionTimeLeft = Mathf.Max(0f, slowMotionTimeLeft - deltaTime);
+        magnetTimeLeft = Mathf.Max(0f, magnetTimeLeft - deltaTime);
+        speedBoostTimeLeft = Mathf.Max(0f, speedBoostTimeLeft - deltaTime);
     }
 
     private void RefreshGameManagerState()
@@ -78,26 +93,19 @@ public sealed class PowerUpSystem : MonoBehaviour
 
     private string GetPowerUpLabel()
     {
-        if (shieldTimeLeft > 0f)
-        {
-            return "Shield";
-        }
-
-        if (doubleScoreTimeLeft > 0f)
-        {
-            return "Double Score";
-        }
-
-        if (slowMotionTimeLeft > 0f)
-        {
-            return "Slow Motion";
-        }
-
+        if (shieldTimeLeft > 0f) return "Shield";
+        if (doubleScoreTimeLeft > 0f) return "Double Score";
+        if (slowMotionTimeLeft > 0f) return "Slow Motion";
+        if (magnetTimeLeft > 0f) return "Magnet";
+        if (speedBoostTimeLeft > 0f) return "Speed Boost";
         return "Ready";
     }
 
     private float GetLongestRemainingTime()
     {
-        return Mathf.Max(shieldTimeLeft, Mathf.Max(doubleScoreTimeLeft, slowMotionTimeLeft));
+        return Mathf.Max(shieldTimeLeft,
+            Mathf.Max(doubleScoreTimeLeft,
+                Mathf.Max(slowMotionTimeLeft,
+                    Mathf.Max(magnetTimeLeft, speedBoostTimeLeft))));
     }
 }
