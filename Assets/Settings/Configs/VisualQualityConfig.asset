@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9f13a2cb11d52485d8269f41ac61310d, type: 3}
+  m_Name: VisualQualityConfig
+  m_EditorClassIdentifier: Assembly-CSharp::VisualQualityConfig
+  low:
+    name: Low
+    unityQualityLevel: 1
+    targetFrameRate: 45
+    shadowQuality: 0
+    antiAliasing: 0
+    postProcessScale: 0
+    fogEnabled: 0
+    animatedTrafficEnabled: 0
+    animatedNeonEnabled: 1
+    neonEmissionScale: 0.8
+    trafficDensity: 0.2
+  medium:
+    name: Medium
+    unityQualityLevel: 3
+    targetFrameRate: 60
+    shadowQuality: 1
+    antiAliasing: 0
+    postProcessScale: 0.65
+    fogEnabled: 1
+    animatedTrafficEnabled: 1
+    animatedNeonEnabled: 1
+    neonEmissionScale: 1
+    trafficDensity: 0.65
+  premium:
+    name: Premium
+    unityQualityLevel: 4
+    targetFrameRate: 60
+    shadowQuality: 2
+    antiAliasing: 2
+    postProcessScale: 1
+    fogEnabled: 1
+    animatedTrafficEnabled: 1
+    animatedNeonEnabled: 1
+    neonEmissionScale: 1.2
+    trafficDensity: 1
