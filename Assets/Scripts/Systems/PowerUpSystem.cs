@@ -26,8 +26,13 @@ public sealed class PowerUpSystem : MonoBehaviour
         RefreshGameManagerState();
     }
 
-    public void ApplyPowerUp(PowerUpType type, float duration)
+    public void ApplyPowerUp(PowerUpType type, float duration, bool recordUsage = true)
     {
+        if (recordUsage)
+        {
+            GameManager.Instance?.RegisterPowerUpUsed(1);
+        }
+
         switch (type)
         {
             case PowerUpType.Shield:
@@ -48,7 +53,10 @@ public sealed class PowerUpSystem : MonoBehaviour
             case PowerUpType.Magnet:
                 magnetTimeLeft = Mathf.Max(magnetTimeLeft, duration);
                 MagnetField magnet = GameManager.Instance?.Player?.GetComponent<MagnetField>();
-                if (magnet != null) magnet.Activate(duration);
+                if (magnet != null)
+                {
+                    magnet.Activate(duration);
+                }
                 break;
             case PowerUpType.SpeedBoost:
                 speedBoostTimeLeft = Mathf.Max(speedBoostTimeLeft, duration);

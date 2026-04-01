@@ -1,9 +1,5 @@
 using UnityEngine;
 
-/// <summary>
-/// Performance auditor that monitors key metrics at runtime.
-/// Logs warnings when thresholds are exceeded.
-/// </summary>
 public sealed class PerformanceAuditor : MonoBehaviour
 {
     [Header("Thresholds")]
@@ -44,12 +40,13 @@ public sealed class PerformanceAuditor : MonoBehaviour
 
     private void RunAudit()
     {
-        CurrentFps = _fpsFrameCount / _fpsAccumulator;
-        if (CurrentFps < _minFps)
+        if (_fpsAccumulator <= 0f || _fpsFrameCount == 0)
         {
-            _minFps = CurrentFps;
+            return;
         }
 
+        CurrentFps = _fpsFrameCount / _fpsAccumulator;
+        _minFps = Mathf.Min(_minFps, CurrentFps);
         _fpsAccumulator = 0f;
         _fpsFrameCount = 0;
 
@@ -59,23 +56,20 @@ public sealed class PerformanceAuditor : MonoBehaviour
         }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-        long totalMemory = System.GC.GetTotalMemory(false);
-        float memoryMB = totalMemory / (1024f * 1024f);
-        if (memoryMB > gcAllocWarningMB * 100f)
+        float memoryMB = System.GC.GetTotalMemory(false) / (1024f * 1024f);
+        if (memoryMB > gcAllocWarningMB)
         {
-            Debug.LogWarning($"[PerfAudit] High GC memory: {memoryMB:0.0}MB");
+            Debug.LogWarning($"[PerfAudit] High GC memory: {memoryMB:0.0}MB (budget {gcAllocWarningMB:0.0}MB)");
         }
 #endif
     }
 
-    /// <summary>
-    /// Call from editor to log a comprehensive report.
-    /// </summary>
     [ContextMenu("Log Performance Report")]
     public void LogReport()
     {
         Debug.Log($"[PerfAudit] FPS: {CurrentFps:0.0} | Min: {_minFps:0.0} | Target: {targetFps}");
         Debug.Log($"[PerfAudit] Quality Level: {QualitySettings.GetQualityLevel()} ({QualitySettings.names[QualitySettings.GetQualityLevel()]})");
+        Debug.Log($"[PerfAudit] Draw call warning threshold: {drawCallWarningThreshold}");
         Debug.Log($"[PerfAudit] GC Memory: {System.GC.GetTotalMemory(false) / (1024f * 1024f):0.0}MB");
         Debug.Log($"[PerfAudit] Active Drones: {EnemyDrone.ActiveDrones.Count} | Active Obstacles: {RunnerObstacle.ActiveObstacles.Count}");
     }

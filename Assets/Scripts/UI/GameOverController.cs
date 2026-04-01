@@ -15,8 +15,6 @@ public sealed class GameOverController : MonoBehaviour
     [SerializeField] private Text xpGainText;
     [SerializeField] private Text dailyChallengeText;
     [SerializeField] private Text tipText;
-    [SerializeField] private Text feverCountText;
-
     public void Configure(Text score, Text distance, Text credits, Text survival)
     {
         scoreText = score;

@@ -3,10 +3,10 @@ using UnityEngine;
 
 public sealed class RunnerObstacle : MonoBehaviour, IHackable
 {
-    private static readonly List<RunnerObstacle> _activeObstaclesList = new List<RunnerObstacle>(64);
-    private static readonly HashSet<RunnerObstacle> _activeObstaclesSet = new HashSet<RunnerObstacle>();
+    private static readonly List<RunnerObstacle> ActiveObstacleList = new List<RunnerObstacle>(64);
+    private static readonly HashSet<RunnerObstacle> ActiveObstacleSet = new HashSet<RunnerObstacle>();
 
-    public static IReadOnlyList<RunnerObstacle> ActiveObstacles => _activeObstaclesList;
+    public static IReadOnlyList<RunnerObstacle> ActiveObstacles => ActiveObstacleList;
 
     [SerializeField] private int collisionDamage = 1;
     [SerializeField] private int hackReward = 25;
@@ -28,9 +28,9 @@ public sealed class RunnerObstacle : MonoBehaviour, IHackable
     private void OnEnable()
     {
         _pooledObject = _pooledObject == null ? GetComponent<PooledObject>() : _pooledObject;
-        if (_activeObstaclesSet.Add(this))
+        if (ActiveObstacleSet.Add(this))
         {
-            _activeObstaclesList.Add(this);
+            ActiveObstacleList.Add(this);
         }
 
         _anchorX = transform.position.x;
@@ -39,9 +39,9 @@ public sealed class RunnerObstacle : MonoBehaviour, IHackable
 
     private void OnDisable()
     {
-        if (_activeObstaclesSet.Remove(this))
+        if (ActiveObstacleSet.Remove(this))
         {
-            _activeObstaclesList.Remove(this);
+            ActiveObstacleList.Remove(this);
         }
     }
 
@@ -74,6 +74,7 @@ public sealed class RunnerObstacle : MonoBehaviour, IHackable
         }
 
         GameManager.Instance?.AddScore(hackReward);
+        GameManager.Instance?.RegisterHackPerformed(1);
         ReturnToPool();
         return true;
     }
@@ -81,7 +82,7 @@ public sealed class RunnerObstacle : MonoBehaviour, IHackable
     public static void DisableThreatsNear(Vector3 position, float radius)
     {
         float radiusSquared = radius * radius;
-        RunnerObstacle[] snapshot = _activeObstaclesList.ToArray();
+        RunnerObstacle[] snapshot = ActiveObstacleList.ToArray();
         for (int i = 0; i < snapshot.Length; i++)
         {
             if (snapshot[i] == null)

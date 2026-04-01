@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -12,21 +14,31 @@ public sealed class PlayerController : MonoBehaviour
     [SerializeField] private PlayerSkinApplier skinApplier;
 
     [Header("Movement")]
-    [SerializeField] private float laneOffset = 3f;
-    [SerializeField] private float laneSmoothTime = 0.08f;
+    [SerializeField] private float laneOffset = 2.5f;
+    [SerializeField] private float laneSmoothTime = 0.06f;
     [SerializeField] private float jumpForce = 11f;
     [SerializeField] private float gravity = 30f;
-    [SerializeField] private float slideDuration = 0.7f;
+    [SerializeField] private float slideDuration = 0.68f;
     [SerializeField] private float slideHeight = 1f;
+    [SerializeField] private float jumpBufferWindow = 0.12f;
+    [SerializeField] private float groundedGraceWindow = 0.1f;
+    [SerializeField] private float safeLaneSnapThreshold = 0.3f;
 
     [Header("Input")]
     [SerializeField] private float swipeThresholdPixels = 70f;
     [SerializeField] private float tapMaxDuration = 0.2f;
+    [SerializeField] private float swipeDominanceRatio = 1.2f;
 
     [Header("Hacking")]
     [SerializeField] private float hackSlowScale = 0.45f;
+    [SerializeField] private float deathSequenceTimeScale = 0.18f;
     [SerializeField] private float hackPulseInterval = 0.55f;
     [SerializeField] private float hackRange = 18f;
+
+    [Header("Revive")]
+    [SerializeField] private float reviveForwardOffset = 4f;
+    [SerializeField] private float reviveHeightOffset = 0.12f;
+    [SerializeField] private float reviveImmunityDuration = 1.25f;
 
     [Header("Health")]
     [SerializeField] private int maxHealth = 1;
@@ -34,18 +46,28 @@ public sealed class PlayerController : MonoBehaviour
     private int desiredLane;
     private int currentHealth;
     private int trackedTouchId = -1;
+    private int lastSafeLane;
     private bool isAlive = true;
     private bool isSliding;
     private bool hackHeld;
     private bool mouseTracking;
+    private bool reviveRecoveryPending;
     private float lateralVelocity;
     private float verticalVelocity;
     private float slideTimeLeft;
     private float nextHackPulseTime;
+    private float jumpBufferTimeLeft;
+    private float groundedGraceTimeLeft;
+    private float autoShootCooldown = 0.35f;
+    private float autoShootTimer;
+    private float damageImmunityTimeLeft;
     private float originalHeight;
     private Vector3 originalCenter;
+    private Vector3 lastSafeGroundedPosition;
     private Vector2 touchStartPosition;
     private float touchStartTime;
+    private Coroutine deathSequenceRoutine;
+    private Coroutine reviveRecoveryRoutine;
 
     public PowerUpSystem PowerUps => powerUps;
     public bool IsAlive => isAlive;
@@ -66,10 +88,13 @@ public sealed class PlayerController : MonoBehaviour
     {
         GameManager.Instance?.RegisterPlayer(this);
         skinApplier?.ApplySelectedSkin();
+        CacheSafeGroundedState();
     }
 
     private void OnDisable()
     {
+        StopDeathSequence();
+        StopReviveRecovery();
         GameManager.Instance?.SetHackTimeScale(false, hackSlowScale);
     }
 
@@ -82,24 +107,50 @@ public sealed class PlayerController : MonoBehaviour
 
     public void Revive()
     {
+        StopDeathSequence();
+        StopReviveRecovery();
+        RestoreStandingCollider();
+        ResetActionState();
+
+        desiredLane = lastSafeLane;
         currentHealth = maxHealth;
         isAlive = true;
-        hackHeld = false;
-        verticalVelocity = 0f;
+        reviveRecoveryPending = true;
+        damageImmunityTimeLeft = reviveImmunityDuration;
+
+        Vector3 revivePosition = BuildRevivePosition();
         characterController.enabled = false;
-        transform.position += Vector3.up * 0.2f;
+        transform.SetPositionAndRotation(revivePosition, Quaternion.identity);
         characterController.enabled = true;
-        powerUps?.ApplyPowerUp(PowerUpType.Shield, 2f);
+        characterController.Move(Vector3.zero);
+
+        verticalVelocity = -2f;
+        groundedGraceTimeLeft = groundedGraceWindow;
+        autoShootTimer = autoShootCooldown * 0.5f;
+        CacheSafeGroundedState();
+
+        powerUps?.ApplyPowerUp(PowerUpType.Shield, 2f, false);
         EnemyDrone.DisableThreatsNear(transform.position, 8f);
         RunnerObstacle.DisableThreatsNear(transform.position, 8f);
+        FindCameraController()?.OnPlayerRevive();
         vfxController?.OnRevive();
         ScreenFlash.Instance?.FlashRevive();
+
+        reviveRecoveryRoutine = StartCoroutine(FinishReviveRecovery());
     }
 
     private void Update()
     {
+        UpdateTransientTimers();
         if (GameManager.Instance == null || GameManager.Instance.State != GameState.Playing || !isAlive)
         {
+            return;
+        }
+
+        UpdateGroundingState();
+        if (reviveRecoveryPending)
+        {
+            UpdateMovement();
             return;
         }
 
@@ -113,7 +164,7 @@ public sealed class PlayerController : MonoBehaviour
 
     public void SetHackInput(bool shouldHack)
     {
-        hackHeld = shouldHack;
+        hackHeld = shouldHack && CanAcceptPlayerActions();
         if (!hackHeld)
         {
             GameManager.Instance?.SetHackTimeScale(false, hackSlowScale);
@@ -122,7 +173,7 @@ public sealed class PlayerController : MonoBehaviour
 
     public void TakeHit(int damage)
     {
-        if (!isAlive)
+        if (!CanReceiveDamage())
         {
             return;
         }
@@ -142,6 +193,43 @@ public sealed class PlayerController : MonoBehaviour
         {
             Die();
         }
+    }
+
+    private void UpdateTransientTimers()
+    {
+        damageImmunityTimeLeft = Mathf.Max(0f, damageImmunityTimeLeft - Time.unscaledDeltaTime);
+        jumpBufferTimeLeft = Mathf.Max(0f, jumpBufferTimeLeft - Time.deltaTime);
+    }
+
+    private void UpdateGroundingState()
+    {
+        if (characterController.isGrounded)
+        {
+            groundedGraceTimeLeft = groundedGraceWindow;
+            CacheSafeGroundedState();
+            if (verticalVelocity < 0f)
+            {
+                verticalVelocity = -2f;
+            }
+        }
+        else
+        {
+            groundedGraceTimeLeft = Mathf.Max(0f, groundedGraceTimeLeft - Time.deltaTime);
+        }
+    }
+
+    private void CacheSafeGroundedState()
+    {
+        float snappedLane = Mathf.Round(transform.position.x / Mathf.Max(0.01f, laneOffset));
+        int lane = Mathf.Clamp(Mathf.RoundToInt(snappedLane), -1, 1);
+        float laneX = lane * laneOffset;
+        if (Mathf.Abs(transform.position.x - laneX) > safeLaneSnapThreshold)
+        {
+            return;
+        }
+
+        lastSafeLane = lane;
+        lastSafeGroundedPosition = new Vector3(laneX, transform.position.y, transform.position.z);
     }
 
     private void HandleTouchInput()
@@ -190,58 +278,90 @@ public sealed class PlayerController : MonoBehaviour
 
     private void EndGesture(Vector2 endPosition)
     {
+        if (!CanAcceptPlayerActions())
+        {
+            trackedTouchId = -1;
+            return;
+        }
+
         Vector2 delta = endPosition - touchStartPosition;
         float duration = Time.unscaledTime - touchStartTime;
         trackedTouchId = -1;
 
         float sensitivity = SettingsManager.Instance != null ? SettingsManager.Instance.SwipeSensitivity : 1f;
-        float adjustedThreshold = swipeThresholdPixels / sensitivity;
+        float adjustedThreshold = swipeThresholdPixels / Mathf.Max(0.5f, sensitivity);
 
         if (delta.magnitude < adjustedThreshold && duration <= tapMaxDuration)
         {
-            if (shootingSystem != null && shootingSystem.TryShootNearestTarget())
+            FireShot();
+            return;
+        }
+
+        float absX = Mathf.Abs(delta.x);
+        float absY = Mathf.Abs(delta.y);
+        if (absX > adjustedThreshold && absX > absY * swipeDominanceRatio)
+        {
+            QueueLaneShift(delta.x > 0f ? 1 : -1);
+            return;
+        }
+
+        if (absY > adjustedThreshold && absY > absX * swipeDominanceRatio)
+        {
+            if (delta.y > 0f)
             {
-                AudioManager.Instance?.PlayShoot();
-                vfxController?.OnShoot();
+                QueueJump();
             }
-
-            return;
-        }
-
-        if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
-        {
-            desiredLane = Mathf.Clamp(desiredLane + (delta.x > 0f ? 1 : -1), -1, 1);
-            return;
-        }
-
-        if (delta.y > 0f)
-        {
-            TryJump();
-        }
-        else
-        {
-            TrySlide();
+            else
+            {
+                TrySlide();
+            }
         }
     }
 
-    private void TryJump()
+    private void QueueLaneShift(int laneDelta)
     {
-        if (!characterController.isGrounded || isSliding)
+        if (!CanAcceptPlayerActions())
+        {
+            return;
+        }
+
+        desiredLane = Mathf.Clamp(desiredLane + laneDelta, -1, 1);
+    }
+
+    private void QueueJump()
+    {
+        if (!CanAcceptPlayerActions())
+        {
+            return;
+        }
+
+        jumpBufferTimeLeft = jumpBufferWindow;
+        TryConsumeJump();
+    }
+
+    private void TryConsumeJump()
+    {
+        if (jumpBufferTimeLeft <= 0f || groundedGraceTimeLeft <= 0f || isSliding || !CanAcceptPlayerActions())
         {
             return;
         }
 
         float actualJumpForce = jumpForce;
         if (UpgradeSystem.Instance != null)
+        {
             actualJumpForce *= UpgradeSystem.Instance.GetMultiplier(UpgradeSystem.UpgradeType.JumpHeight);
+        }
+
         verticalVelocity = actualJumpForce;
+        jumpBufferTimeLeft = 0f;
+        groundedGraceTimeLeft = 0f;
         AudioManager.Instance?.PlayJump();
         vfxController?.OnJump();
     }
 
     private void TrySlide()
     {
-        if (!characterController.isGrounded || isSliding)
+        if (groundedGraceTimeLeft <= 0f || isSliding || !CanAcceptPlayerActions())
         {
             return;
         }
@@ -267,13 +387,42 @@ public sealed class PlayerController : MonoBehaviour
             return;
         }
 
+        if (!CanStandUp())
+        {
+            slideTimeLeft = 0.08f;
+            return;
+        }
+
+        RestoreStandingCollider();
+    }
+
+    private void RestoreStandingCollider()
+    {
         isSliding = false;
+        slideTimeLeft = 0f;
         characterController.height = originalHeight;
         characterController.center = originalCenter;
     }
 
+    private bool CanStandUp()
+    {
+        float radius = Mathf.Max(0.05f, characterController.radius - 0.02f);
+        Vector3 worldCenter = transform.position + originalCenter;
+        float halfHeight = Mathf.Max(radius, (originalHeight * 0.5f) - radius);
+        Vector3 bottom = worldCenter + Vector3.down * halfHeight;
+        Vector3 top = worldCenter + Vector3.up * halfHeight;
+        return !Physics.CheckCapsule(bottom, top, radius, Physics.AllLayers, QueryTriggerInteraction.Ignore);
+    }
+
     private void UpdateHackMode()
     {
+        if (!CanAcceptPlayerActions())
+        {
+            GameManager.Instance?.SetHackTimeScale(false, hackSlowScale);
+            vfxController?.SetHackState(false);
+            return;
+        }
+
         GameManager.Instance?.SetHackTimeScale(hackHeld, hackSlowScale);
         vfxController?.SetHackState(hackHeld);
         if (!hackHeld || Time.unscaledTime < nextHackPulseTime)
@@ -282,75 +431,96 @@ public sealed class PlayerController : MonoBehaviour
         }
 
         nextHackPulseTime = Time.unscaledTime + hackPulseInterval;
-        TryHackNearestThreat();
+        if (TryHackNearestThreat())
+        {
+            vfxController?.OnPowerUp();
+        }
+
         AudioManager.Instance?.PlayHackPulse();
     }
 
     private void UpdateMovement()
     {
+        TryConsumeJump();
+
         float targetX = desiredLane * laneOffset;
         float nextX = Mathf.SmoothDamp(transform.position.x, targetX, ref lateralVelocity, laneSmoothTime);
         float moveX = nextX - transform.position.x;
-        verticalVelocity = characterController.isGrounded && verticalVelocity < 0f ? -2f : verticalVelocity - (gravity * Time.deltaTime);
+        if (!characterController.isGrounded)
+        {
+            verticalVelocity -= gravity * Time.deltaTime;
+        }
 
         Vector3 move = new Vector3(moveX, verticalVelocity * Time.deltaTime, GameManager.Instance.CurrentForwardSpeed * Time.deltaTime);
         characterController.Move(move);
     }
 
-    private float AutoShootCooldown = 0.35f;
-    private float _autoShootTimer;
-
     private void HandleAutoShoot()
     {
-        if (SettingsManager.Instance == null || !SettingsManager.Instance.AutoShootEnabled)
-            return;
-
-        if (FeverMode.Instance != null && FeverMode.Instance.IsFeverActive)
+        if (!CanAcceptPlayerActions() || SettingsManager.Instance == null || !SettingsManager.Instance.AutoShootEnabled)
         {
-            _autoShootTimer -= Time.deltaTime;
-            if (_autoShootTimer <= 0f)
-            {
-                _autoShootTimer = AutoShootCooldown * 0.5f; // Faster during fever
-                if (shootingSystem != null && shootingSystem.TryShootNearestTarget())
-                {
-                    AudioManager.Instance?.PlayShoot();
-                    vfxController?.OnShoot();
-                }
-            }
             return;
         }
 
-        _autoShootTimer -= Time.deltaTime;
-        if (_autoShootTimer <= 0f)
+        autoShootTimer -= Time.deltaTime;
+        if (autoShootTimer > 0f)
         {
-            _autoShootTimer = AutoShootCooldown;
-            if (shootingSystem != null && shootingSystem.TryShootNearestTarget())
-            {
-                AudioManager.Instance?.PlayShoot();
-                vfxController?.OnShoot();
-            }
+            return;
+        }
+
+        float cadence = FeverMode.Instance != null && FeverMode.Instance.IsFeverActive ? 0.5f : 1f;
+        autoShootTimer = autoShootCooldown * cadence;
+        FireShot();
+    }
+
+    private void FireShot()
+    {
+        if (!CanAcceptPlayerActions())
+        {
+            return;
+        }
+
+        if (shootingSystem != null && shootingSystem.TryShootNearestTarget())
+        {
+            AudioManager.Instance?.PlayShoot();
+            vfxController?.OnShoot();
         }
     }
 
-    private void TryHackNearestThreat()
+    private bool TryHackNearestThreat()
     {
         float actualHackRange = hackRange;
         if (UpgradeSystem.Instance != null)
+        {
             actualHackRange *= UpgradeSystem.Instance.GetMultiplier(UpgradeSystem.UpgradeType.HackRange);
+        }
 
-        IHackable bestTarget = null;
         float bestDistance = actualHackRange * actualHackRange;
         Vector3 origin = transform.position;
+        IHackable bestTarget = GetClosestHackable(EnemyDrone.ActiveDrones, origin, ref bestDistance, null);
+        bestTarget = GetClosestHackable(RunnerObstacle.ActiveObstacles, origin, ref bestDistance, bestTarget);
+        BossController boss = BossController.ActiveBoss;
+        if (boss != null && boss.IsHackable)
+        {
+            MonoBehaviour bossBehaviour = boss as MonoBehaviour;
+            Vector3 offset = bossBehaviour.transform.position - origin;
+            if (offset.z >= -0.5f)
+            {
+                float distance = offset.sqrMagnitude;
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    bestTarget = boss;
+                }
+            }
+        }
 
-        bestTarget = GetClosestHackable(EnemyDrone.ActiveDrones, origin, bestDistance, ref bestDistance);
-        bestTarget = GetClosestHackable(RunnerObstacle.ActiveObstacles, origin, bestDistance, ref bestDistance, bestTarget);
-        bestTarget?.TryHack();
+        return bestTarget != null && bestTarget.TryHack();
     }
 
-    private static IHackable GetClosestHackable<T>(System.Collections.Generic.IEnumerable<T> candidates, Vector3 origin, float initialBest, ref float bestDistance, IHackable fallback = null) where T : MonoBehaviour, IHackable
+    private static IHackable GetClosestHackable<T>(IEnumerable<T> candidates, Vector3 origin, ref float bestDistance, IHackable fallback) where T : MonoBehaviour, IHackable
     {
         IHackable bestTarget = fallback;
-
         foreach (T candidate in candidates)
         {
             if (candidate == null || !candidate.IsHackable)
@@ -365,7 +535,7 @@ public sealed class PlayerController : MonoBehaviour
             }
 
             float distance = offset.sqrMagnitude;
-            if (distance > initialBest || distance >= bestDistance)
+            if (distance >= bestDistance)
             {
                 continue;
             }
@@ -392,27 +562,60 @@ public sealed class PlayerController : MonoBehaviour
         return EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
     }
 
+    private bool CanAcceptPlayerActions()
+    {
+        return isAlive && !reviveRecoveryPending && GameManager.Instance != null && GameManager.Instance.State == GameState.Playing;
+    }
+
+    private bool CanReceiveDamage()
+    {
+        return isAlive && !reviveRecoveryPending && damageImmunityTimeLeft <= 0f && GameManager.Instance != null && GameManager.Instance.State == GameState.Playing;
+    }
+
+    private void ResetActionState()
+    {
+        hackHeld = false;
+        trackedTouchId = -1;
+        mouseTracking = false;
+        nextHackPulseTime = 0f;
+        jumpBufferTimeLeft = 0f;
+        groundedGraceTimeLeft = 0f;
+        verticalVelocity = 0f;
+        lateralVelocity = 0f;
+        GameManager.Instance?.SetHackTimeScale(false, hackSlowScale);
+    }
+
+    private Vector3 BuildRevivePosition()
+    {
+        Vector3 basePosition = lastSafeGroundedPosition == Vector3.zero ? transform.position : lastSafeGroundedPosition;
+        float laneX = lastSafeLane * laneOffset;
+        float safeZ = Mathf.Max(basePosition.z + reviveForwardOffset, transform.position.z + 1.5f);
+        float safeY = Mathf.Max(basePosition.y, originalHeight * 0.5f) + reviveHeightOffset;
+        return new Vector3(laneX, safeY, safeZ);
+    }
+
     private void Die()
     {
+        if (!GameManager.Instance.BeginDeathSequence(this, deathSequenceTimeScale))
+        {
+            return;
+        }
+
         isAlive = false;
-        hackHeld = false;
-        GameManager.Instance?.SetHackTimeScale(false, hackSlowScale);
+        StopReviveRecovery();
+        ResetActionState();
         AudioManager.Instance?.PlayHit();
         vfxController?.OnHit();
+        FindCameraController()?.OnPlayerDeath();
         ScreenShake.Instance?.ShakeDeath();
         HapticFeedback.Instance?.VibrateOnDeath();
         ScreenFlash.Instance?.FlashDeath();
         ComboSystem.Instance?.ResetAll();
-        StartCoroutine(DeathSequence());
+        deathSequenceRoutine = StartCoroutine(DeathSequence());
     }
 
-    private System.Collections.IEnumerator DeathSequence()
+    private IEnumerator DeathSequence()
     {
-        // Slow-mo death freeze
-        Time.timeScale = 0.15f;
-        Time.fixedDeltaTime = 0.02f * Time.timeScale;
-
-        // Tumble the player model
         float tumbleTimer = 0f;
         Vector3 tumbleAxis = new Vector3(0.3f, 0.1f, 1f).normalized;
         while (tumbleTimer < 0.8f)
@@ -423,10 +626,43 @@ public sealed class PlayerController : MonoBehaviour
             yield return null;
         }
 
-        // Restore time before game over transition
-        Time.timeScale = 1f;
-        Time.fixedDeltaTime = 0.02f;
+        deathSequenceRoutine = null;
+        GameManager.Instance?.CompleteDeathSequence(this);
+    }
 
-        GameManager.Instance?.HandlePlayerDeath(this);
+    private IEnumerator FinishReviveRecovery()
+    {
+        yield return null;
+        reviveRecoveryPending = false;
+        reviveRecoveryRoutine = null;
+    }
+
+    private void StopDeathSequence()
+    {
+        if (deathSequenceRoutine == null)
+        {
+            return;
+        }
+
+        StopCoroutine(deathSequenceRoutine);
+        deathSequenceRoutine = null;
+    }
+
+    private void StopReviveRecovery()
+    {
+        if (reviveRecoveryRoutine == null)
+        {
+            return;
+        }
+
+        StopCoroutine(reviveRecoveryRoutine);
+        reviveRecoveryRoutine = null;
+        reviveRecoveryPending = false;
+    }
+
+    private DynamicCameraController FindCameraController()
+    {
+        Camera camera = Camera.main;
+        return camera != null ? camera.GetComponent<DynamicCameraController>() : null;
     }
 }

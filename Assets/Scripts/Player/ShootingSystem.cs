@@ -35,7 +35,7 @@ public sealed class ShootingSystem : MonoBehaviour
             return false;
         }
 
-        EnemyDrone target = FindNearestTarget();
+        IDamageable target = FindNearestTarget();
         if (target == null)
         {
             return false;
@@ -48,7 +48,21 @@ public sealed class ShootingSystem : MonoBehaviour
         return true;
     }
 
-    private EnemyDrone FindNearestTarget()
+    private IDamageable FindNearestTarget()
+    {
+        IDamageable bestTarget = FindNearestDrone();
+        float bestDistance = GetTargetDistance(bestTarget);
+        BossController boss = BossController.ActiveBoss;
+        if (boss == null || !boss.IsAlive)
+        {
+            return bestTarget;
+        }
+
+        float bossDistance = GetTargetDistance(boss);
+        return bossDistance < bestDistance ? boss : bestTarget;
+    }
+
+    private IDamageable FindNearestDrone()
     {
         EnemyDrone bestTarget = null;
         float bestDistance = targetRange * targetRange;
@@ -60,13 +74,7 @@ public sealed class ShootingSystem : MonoBehaviour
                 continue;
             }
 
-            Vector3 offset = drone.transform.position - transform.position;
-            if (offset.z < -1f)
-            {
-                continue;
-            }
-
-            float distance = offset.sqrMagnitude;
+            float distance = GetTargetDistance(drone);
             if (distance >= bestDistance)
             {
                 continue;
@@ -77,6 +85,24 @@ public sealed class ShootingSystem : MonoBehaviour
         }
 
         return bestTarget;
+    }
+
+    private float GetTargetDistance(IDamageable target)
+    {
+        MonoBehaviour targetBehaviour = target as MonoBehaviour;
+        if (targetBehaviour == null)
+        {
+            return float.PositiveInfinity;
+        }
+
+        Vector3 offset = targetBehaviour.transform.position - transform.position;
+        if (offset.z < -1f)
+        {
+            return float.PositiveInfinity;
+        }
+
+        float distance = offset.sqrMagnitude;
+        return distance <= targetRange * targetRange ? distance : float.PositiveInfinity;
     }
 
     private void EnsurePool()

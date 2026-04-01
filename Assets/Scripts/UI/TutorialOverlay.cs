@@ -55,7 +55,7 @@ public sealed class TutorialOverlay : MonoBehaviour
             dismissButton.onClick.AddListener(AdvanceStep);
         }
 
-        Time.timeScale = 0f;
+        GameManager.Instance?.TryPauseRun();
     }
 
     private void AdvanceStep()
@@ -90,6 +90,6 @@ public sealed class TutorialOverlay : MonoBehaviour
             overlayRoot.SetActive(false);
         }
 
-        Time.timeScale = 1f;
+        GameManager.Instance?.ResumeRun();
     }
 }

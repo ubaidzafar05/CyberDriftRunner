@@ -3,9 +3,6 @@ using UnityEngine.UI;
 
 public sealed class MainMenuController : MonoBehaviour
 {
-    private const string SoundPrefKey = "cdr.sound";
-    private const string VibrationPrefKey = "cdr.vibration";
-
     [SerializeField] private GameObject settingsPanel;
     [SerializeField] private GameObject statsPanel;
     [SerializeField] private Text soundValueText;
@@ -18,20 +15,24 @@ public sealed class MainMenuController : MonoBehaviour
 
     private void Start()
     {
-        RefreshLabels();
-        AudioManager.Instance?.SetAudioEnabled(PlayerPrefs.GetInt(SoundPrefKey, 1) == 1);
-        if (settingsPanel != null) settingsPanel.SetActive(false);
-        if (statsPanel != null) statsPanel.SetActive(false);
-
-        // Apply saved settings volumes
         if (SettingsManager.Instance != null)
         {
-            AudioManager.Instance?.SetMusicVolume(SettingsManager.Instance.MusicVolume);
-            AudioManager.Instance?.SetSfxVolume(SettingsManager.Instance.SfxVolume);
+            SettingsManager.Instance.OnSettingsChanged += RefreshLabels;
         }
 
+        RefreshLabels();
+        if (settingsPanel != null) settingsPanel.SetActive(false);
+        if (statsPanel != null) statsPanel.SetActive(false);
         RefreshDailyReward();
         RefreshPlayerInfo();
+    }
+
+    private void OnDestroy()
+    {
+        if (SettingsManager.Instance != null)
+        {
+            SettingsManager.Instance.OnSettingsChanged -= RefreshLabels;
+        }
     }
 
     public void Configure(GameObject panel, Text soundText, Text vibrationText)
@@ -107,17 +108,23 @@ public sealed class MainMenuController : MonoBehaviour
 
     public void ToggleSound()
     {
-        int nextValue = PlayerPrefs.GetInt(SoundPrefKey, 1) == 1 ? 0 : 1;
-        PlayerPrefs.SetInt(SoundPrefKey, nextValue);
-        AudioManager.Instance?.SetAudioEnabled(nextValue == 1);
+        if (SettingsManager.Instance == null)
+        {
+            return;
+        }
+
+        SettingsManager.Instance.SetAudioEnabled(!SettingsManager.Instance.AudioEnabled);
         RefreshLabels();
     }
 
     public void ToggleVibration()
     {
-        int nextValue = PlayerPrefs.GetInt(VibrationPrefKey, 1) == 1 ? 0 : 1;
-        PlayerPrefs.SetInt(VibrationPrefKey, nextValue);
-        SettingsManager.Instance?.SetVibration(nextValue == 1);
+        if (SettingsManager.Instance == null)
+        {
+            return;
+        }
+
+        SettingsManager.Instance.SetVibration(!SettingsManager.Instance.VibrationEnabled);
         RefreshLabels();
     }
 
@@ -129,14 +136,19 @@ public sealed class MainMenuController : MonoBehaviour
 
     private void RefreshLabels()
     {
+        if (SettingsManager.Instance == null)
+        {
+            return;
+        }
+
         if (soundValueText != null)
         {
-            soundValueText.text = PlayerPrefs.GetInt(SoundPrefKey, 1) == 1 ? "On" : "Off";
+            soundValueText.text = SettingsManager.Instance.AudioEnabled ? "On" : "Off";
         }
 
         if (vibrationValueText != null)
         {
-            vibrationValueText.text = PlayerPrefs.GetInt(VibrationPrefKey, 1) == 1 ? "On" : "Off";
+            vibrationValueText.text = SettingsManager.Instance.VibrationEnabled ? "On" : "Off";
         }
     }
 

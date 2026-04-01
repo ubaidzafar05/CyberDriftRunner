@@ -41,9 +41,14 @@ public sealed class AchievementPopup : MonoBehaviour
         Instance = null;
     }
 
-    private void HandleAchievementUnlocked(string id, string description)
+    private void HandleAchievementUnlocked(AchievementDefinition definition)
     {
-        Show("Achievement Unlocked!", description);
+        if (definition == null)
+        {
+            return;
+        }
+
+        Show(definition.Title, definition.Description);
     }
 
     public void Show(string title, string description)

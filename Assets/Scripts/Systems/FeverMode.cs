@@ -18,11 +18,11 @@ public sealed class FeverMode : MonoBehaviour
 
     private float _feverTimer;
     private bool _feverActive;
-    private float _originalSpeedGain;
 
     public bool IsFeverActive => _feverActive;
     public float FeverTimeLeft => _feverTimer;
     public float FeverProgress => feverDuration > 0 ? _feverTimer / feverDuration : 0f;
+    public float SpeedBoostMultiplier => _feverActive ? 1f + Mathf.Max(0f, speedBoostPercent) : 1f;
 
     public event System.Action OnFeverStart;
     public event System.Action OnFeverEnd;

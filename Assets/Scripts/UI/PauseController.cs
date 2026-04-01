@@ -9,7 +9,6 @@ public sealed class PauseController : MonoBehaviour
     [SerializeField] private Button quitButton;
 
     private bool _isPaused;
-    private float _savedTimeScale;
 
     private void Start()
     {
@@ -54,14 +53,21 @@ public sealed class PauseController : MonoBehaviour
 
     private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Escape) && GameManager.Instance != null && GameManager.Instance.State == GameState.Playing)
+        if (Input.GetKeyDown(KeyCode.Escape) && GameManager.Instance != null)
         {
             TogglePause();
         }
+
+        SyncPanelState();
     }
 
     public void TogglePause()
     {
+        if (GameManager.Instance == null)
+        {
+            return;
+        }
+
         if (_isPaused)
         {
             Resume();
@@ -74,41 +80,30 @@ public sealed class PauseController : MonoBehaviour
 
     public void Pause()
     {
-        if (_isPaused || GameManager.Instance == null || GameManager.Instance.State != GameState.Playing)
+        if (GameManager.Instance == null || !GameManager.Instance.TryPauseRun())
         {
             return;
         }
 
         _isPaused = true;
-        _savedTimeScale = Time.timeScale;
-        Time.timeScale = 0f;
-
-        if (pausePanel != null)
-        {
-            pausePanel.SetActive(true);
-        }
+        SyncPanelState();
     }
 
     public void Resume()
     {
-        if (!_isPaused)
+        if (GameManager.Instance == null || !GameManager.Instance.ResumeRun())
         {
             return;
         }
 
         _isPaused = false;
-        Time.timeScale = _savedTimeScale > 0f ? _savedTimeScale : 1f;
-
-        if (pausePanel != null)
-        {
-            pausePanel.SetActive(false);
-        }
+        SyncPanelState();
     }
 
     public void QuitToMenu()
     {
         _isPaused = false;
-        Time.timeScale = 1f;
+        SyncPanelState();
         GameManager.Instance?.ReturnToMenu();
     }
 
@@ -118,5 +113,19 @@ public sealed class PauseController : MonoBehaviour
         pauseButton = pause;
         resumeButton = resume;
         quitButton = quit;
+    }
+
+    private void SyncPanelState()
+    {
+        if (GameManager.Instance == null)
+        {
+            return;
+        }
+
+        _isPaused = GameManager.Instance.State == GameState.Paused;
+        if (pausePanel != null && pausePanel.activeSelf != _isPaused)
+        {
+            pausePanel.SetActive(_isPaused);
+        }
     }
 }

@@ -17,7 +17,10 @@ public sealed class LeaderboardSystem : MonoBehaviour
         public string Date;
     }
 
+    [SerializeField] private MonoBehaviour transportBehaviour;
+
     private readonly List<LeaderboardEntry> _entries = new List<LeaderboardEntry>(MaxEntries);
+    private ILeaderboardTransport _transport;
 
     public IReadOnlyList<LeaderboardEntry> Entries => _entries;
 
@@ -31,6 +34,7 @@ public sealed class LeaderboardSystem : MonoBehaviour
 
         Instance = this;
         DontDestroyOnLoad(gameObject);
+        _transport = transportBehaviour as ILeaderboardTransport;
         Load();
     }
 
@@ -38,29 +42,15 @@ public sealed class LeaderboardSystem : MonoBehaviour
     {
         LeaderboardEntry entry = new LeaderboardEntry
         {
-            PlayerName = "You",
+            PlayerName = GetPlayerName(),
             Score = summary.Score,
             Distance = summary.Distance,
             Date = System.DateTime.UtcNow.ToString("yyyy-MM-dd")
         };
 
-        int insertIndex = _entries.Count;
-        for (int i = 0; i < _entries.Count; i++)
-        {
-            if (summary.Score > _entries[i].Score)
-            {
-                insertIndex = i;
-                break;
-            }
-        }
-
-        _entries.Insert(insertIndex, entry);
-        if (_entries.Count > MaxEntries)
-        {
-            _entries.RemoveAt(_entries.Count - 1);
-        }
-
+        int insertIndex = InsertEntry(entry);
         Save();
+        SubmitRemote(summary, entry.PlayerName);
         return insertIndex < MaxEntries;
     }
 
@@ -83,6 +73,50 @@ public sealed class LeaderboardSystem : MonoBehaviour
         return _entries.GetRange(0, take);
     }
 
+    public LeaderboardSubmissionPayload BuildPayload(RunSummary summary, string playerName)
+    {
+        return new LeaderboardSubmissionPayload
+        {
+            PlayerId = SystemInfo.deviceUniqueIdentifier,
+            PlayerName = playerName,
+            Score = summary.Score,
+            Distance = Mathf.FloorToInt(summary.Distance),
+            DateUtc = System.DateTime.UtcNow.ToString("o")
+        };
+    }
+
+    private int InsertEntry(LeaderboardEntry entry)
+    {
+        int insertIndex = _entries.Count;
+        for (int i = 0; i < _entries.Count; i++)
+        {
+            if (entry.Score > _entries[i].Score)
+            {
+                insertIndex = i;
+                break;
+            }
+        }
+
+        _entries.Insert(insertIndex, entry);
+        if (_entries.Count > MaxEntries)
+        {
+            _entries.RemoveAt(_entries.Count - 1);
+        }
+
+        return insertIndex;
+    }
+
+    private void SubmitRemote(RunSummary summary, string playerName)
+    {
+        if (_transport == null)
+        {
+            return;
+        }
+
+        LeaderboardSubmissionPayload payload = BuildPayload(summary, playerName);
+        _transport.SubmitScore(payload);
+    }
+
     private void Load()
     {
         _entries.Clear();
@@ -91,6 +125,7 @@ public sealed class LeaderboardSystem : MonoBehaviour
         {
             LeaderboardEntry entry = new LeaderboardEntry
             {
+                PlayerName = PlayerPrefs.GetString(LeaderboardPrefix + "name." + i, "You"),
                 Score = PlayerPrefs.GetInt(LeaderboardPrefix + "score." + i, 0),
                 Distance = PlayerPrefs.GetFloat(LeaderboardPrefix + "dist." + i, 0f),
                 Date = PlayerPrefs.GetString(LeaderboardPrefix + "date." + i, "")
@@ -105,11 +140,17 @@ public sealed class LeaderboardSystem : MonoBehaviour
         PlayerPrefs.SetInt(LeaderboardPrefix + "count", _entries.Count);
         for (int i = 0; i < _entries.Count; i++)
         {
+            PlayerPrefs.SetString(LeaderboardPrefix + "name." + i, _entries[i].PlayerName);
             PlayerPrefs.SetInt(LeaderboardPrefix + "score." + i, _entries[i].Score);
             PlayerPrefs.SetFloat(LeaderboardPrefix + "dist." + i, _entries[i].Distance);
             PlayerPrefs.SetString(LeaderboardPrefix + "date." + i, _entries[i].Date);
         }
 
         PlayerPrefs.Save();
+    }
+
+    private static string GetPlayerName()
+    {
+        return string.IsNullOrWhiteSpace(SystemInfo.deviceName) ? "Runner" : SystemInfo.deviceName;
     }
 }

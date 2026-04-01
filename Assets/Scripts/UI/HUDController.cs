@@ -11,6 +11,8 @@ public sealed class HUDController : MonoBehaviour
     [SerializeField] private Text zoneText;
     [SerializeField] private Text feverText;
     [SerializeField] private Text fpsText;
+    [SerializeField] private Text missionText;
+    [SerializeField] private Text bossText;
 
     private int _cachedScore = -1;
     private int _cachedDistance = -1;
@@ -89,6 +91,8 @@ public sealed class HUDController : MonoBehaviour
 
         UpdateComboDisplay();
         UpdateFeverDisplay();
+        UpdateMissionDisplay();
+        UpdateBossDisplay();
     }
 
     private void UpdateComboDisplay()
@@ -144,5 +148,34 @@ public sealed class HUDController : MonoBehaviour
         zoneText.text = zoneName;
         zoneText.color = zoneColor;
         zoneText.gameObject.SetActive(true);
+    }
+
+    private void UpdateMissionDisplay()
+    {
+        if (missionText == null || MissionSystem.Instance == null)
+        {
+            return;
+        }
+
+        missionText.text = MissionSystem.Instance.GetPrimaryMissionLabel();
+        missionText.gameObject.SetActive(!string.IsNullOrWhiteSpace(missionText.text));
+    }
+
+    private void UpdateBossDisplay()
+    {
+        if (bossText == null)
+        {
+            return;
+        }
+
+        BossController boss = GameManager.Instance != null ? GameManager.Instance.ActiveBoss : null;
+        if (boss == null || !GameManager.Instance.IsBossEncounterActive)
+        {
+            bossText.gameObject.SetActive(false);
+            return;
+        }
+
+        bossText.text = $"BOSS {boss.CurrentHealth}/{boss.MaxHealth}";
+        bossText.gameObject.SetActive(true);
     }
 }

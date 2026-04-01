@@ -43,7 +43,6 @@ public sealed class MagnetField : MonoBehaviour
         if (GameManager.Instance?.Player == null) return;
 
         Vector3 playerPos = GameManager.Instance.Player.transform.position;
-        float radiusSqr = magnetRadius * magnetRadius;
 
         // Apply magnet upgrade bonus
         float bonusRadius = UpgradeSystem.Instance != null
@@ -52,7 +51,7 @@ public sealed class MagnetField : MonoBehaviour
         float effectiveRadius = magnetRadius + bonusRadius;
         float effectiveRadiusSqr = effectiveRadius * effectiveRadius;
 
-        CreditPickup[] credits = FindObjectsByType<CreditPickup>(FindObjectsSortMode.None);
+        CreditPickup[] credits = FindObjectsByType<CreditPickup>(FindObjectsInactive.Exclude);
         for (int i = 0; i < credits.Length; i++)
         {
             if (credits[i] == null || !credits[i].gameObject.activeInHierarchy)

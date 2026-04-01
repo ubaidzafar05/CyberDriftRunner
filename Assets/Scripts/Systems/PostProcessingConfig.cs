@@ -1,78 +1,141 @@
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
-/// <summary>
-/// URP post-processing configuration helper.
-/// Attach to the camera and configure bloom/vignette/chromatic aberration.
-/// Requires Universal Render Pipeline and Volume component.
-/// When URP is active in the project, uncomment the URP-specific code below.
-/// </summary>
+[RequireComponent(typeof(Camera))]
 public sealed class PostProcessingConfig : MonoBehaviour
 {
+    [Header("Profile")]
+    [SerializeField] private VolumeProfile baseProfile;
+    [SerializeField] private bool cloneProfileAtRuntime = true;
+    [SerializeField] private VisualQualityConfig qualityConfig;
+
     [Header("Bloom")]
-    [SerializeField] private float bloomIntensity = 2.5f;
-    [SerializeField] private float bloomThreshold = 0.8f;
-    [SerializeField] private float bloomScatter = 0.7f;
-    [SerializeField] private Color bloomTint = new Color(0.6f, 0.85f, 1f);
+    [SerializeField] private float bloomIntensity = 1.9f;
+    [SerializeField] private float bloomThreshold = 0.82f;
+    [SerializeField] private float bloomScatter = 0.72f;
+    [SerializeField] private Color bloomTint = new Color(0.55f, 0.82f, 1f);
 
     [Header("Vignette")]
-    [SerializeField] private float vignetteIntensity = 0.35f;
-    [SerializeField] private Color vignetteColor = new Color(0.02f, 0f, 0.15f);
+    [SerializeField] private float vignetteIntensity = 0.24f;
+    [SerializeField] private Color vignetteColor = new Color(0.04f, 0f, 0.13f);
 
     [Header("Chromatic Aberration")]
-    [SerializeField] private float chromaticIntensity = 0.15f;
+    [SerializeField] private float chromaticIntensity = 0.08f;
 
     [Header("Color Adjustments")]
-    [SerializeField] private float contrast = 10f;
-    [SerializeField] private float saturation = 15f;
+    [SerializeField] private float contrast = 12f;
+    [SerializeField] private float saturation = 8f;
+    [SerializeField] private float postExposure = 0.1f;
 
-    /*
-    // URP Volume Setup — uncomment when URP is active in the project:
-    
-    using UnityEngine.Rendering;
-    using UnityEngine.Rendering.Universal;
-    
+    [Header("Atmosphere")]
+    [SerializeField] private bool enableFog = true;
+    [SerializeField] private Color fogColor = new Color(0.03f, 0.03f, 0.08f);
+    [SerializeField] private float fogStartDistance = 24f;
+    [SerializeField] private float fogEndDistance = 150f;
+
     private Volume _volume;
-    
-    private void Awake()
-    {
-        _volume = gameObject.AddComponent<Volume>();
-        _volume.isGlobal = true;
-        _volume.priority = 1;
-        
-        VolumeProfile profile = ScriptableObject.CreateInstance<VolumeProfile>();
-        _volume.profile = profile;
-        
-        // Bloom
-        Bloom bloom = profile.Add<Bloom>();
-        bloom.active = true;
-        bloom.intensity.Override(bloomIntensity);
-        bloom.threshold.Override(bloomThreshold);
-        bloom.scatter.Override(bloomScatter);
-        bloom.tint.Override(bloomTint);
-        
-        // Vignette  
-        Vignette vignette = profile.Add<Vignette>();
-        vignette.active = true;
-        vignette.intensity.Override(vignetteIntensity);
-        vignette.color.Override(vignetteColor);
-        
-        // Chromatic Aberration
-        ChromaticAberration ca = profile.Add<ChromaticAberration>();
-        ca.active = true;
-        ca.intensity.Override(chromaticIntensity);
-        
-        // Color Adjustments
-        ColorAdjustments colorAdj = profile.Add<ColorAdjustments>();
-        colorAdj.active = true;
-        colorAdj.contrast.Override(contrast);
-        colorAdj.saturation.Override(saturation);
-    }
-    */
+    private VolumeProfile _runtimeProfile;
+    private Bloom _bloom;
+    private Vignette _vignette;
+    private ChromaticAberration _chromaticAberration;
+    private ColorAdjustments _colorAdjustments;
+    private Tonemapping _tonemapping;
 
     private void Awake()
     {
-        // Placeholder — URP Volume setup goes here when URP is activated.
-        // See commented code above for full implementation.
-        Debug.Log("[PostProcessing] URP Volume config ready. Activate URP to enable bloom/vignette/CA.");
+        _volume = GetComponent<Volume>();
+        if (_volume == null)
+        {
+            _volume = gameObject.AddComponent<Volume>();
+        }
+
+        _volume.isGlobal = true;
+        _volume.priority = 10f;
+        _runtimeProfile = ResolveProfile();
+        _volume.profile = _runtimeProfile;
+        EnsureOverrides(_runtimeProfile);
+        ApplyQuality(SettingsManager.Instance != null ? SettingsManager.Instance.QualityLevel : 1);
+        ApplyAtmosphere();
+    }
+
+    private void OnEnable()
+    {
+        if (SettingsManager.Instance != null)
+        {
+            SettingsManager.Instance.OnSettingsChanged += HandleSettingsChanged;
+        }
+    }
+
+    private void OnDisable()
+    {
+        if (SettingsManager.Instance != null)
+        {
+            SettingsManager.Instance.OnSettingsChanged -= HandleSettingsChanged;
+        }
+    }
+
+    private VolumeProfile ResolveProfile()
+    {
+        if (baseProfile == null)
+        {
+            return ScriptableObject.CreateInstance<VolumeProfile>();
+        }
+
+        return cloneProfileAtRuntime ? Instantiate(baseProfile) : baseProfile;
+    }
+
+    private void EnsureOverrides(VolumeProfile profile)
+    {
+        _bloom = profile.TryGet(out Bloom bloom) ? bloom : profile.Add<Bloom>(true);
+        _vignette = profile.TryGet(out Vignette vignette) ? vignette : profile.Add<Vignette>(true);
+        _chromaticAberration = profile.TryGet(out ChromaticAberration ca) ? ca : profile.Add<ChromaticAberration>(true);
+        _colorAdjustments = profile.TryGet(out ColorAdjustments adjustments) ? adjustments : profile.Add<ColorAdjustments>(true);
+        _tonemapping = profile.TryGet(out Tonemapping tonemapping) ? tonemapping : profile.Add<Tonemapping>(true);
+        _tonemapping.mode.Override(TonemappingMode.ACES);
+    }
+
+    private void HandleSettingsChanged()
+    {
+        ApplyQuality(SettingsManager.Instance != null ? SettingsManager.Instance.QualityLevel : 1);
+        ApplyAtmosphere();
+    }
+
+    private void ApplyQuality(int qualityLevel)
+    {
+        VisualQualityConfig.Tier tier = qualityConfig != null ? qualityConfig.GetTier(qualityLevel) : null;
+        float effectScale = tier != null ? Mathf.Clamp01(tier.postProcessScale) : qualityLevel == 0 ? 0f : qualityLevel == 1 ? 0.65f : 1f;
+        _volume.weight = effectScale <= 0f ? 0f : 1f;
+
+        _bloom.active = effectScale > 0f;
+        _bloom.intensity.Override(bloomIntensity * effectScale);
+        _bloom.threshold.Override(bloomThreshold);
+        _bloom.scatter.Override(bloomScatter);
+        _bloom.tint.Override(bloomTint);
+
+        _vignette.active = effectScale > 0f;
+        _vignette.intensity.Override(vignetteIntensity * Mathf.Lerp(0.7f, 1f, effectScale));
+        _vignette.color.Override(vignetteColor);
+
+        _chromaticAberration.active = qualityLevel >= 2;
+        _chromaticAberration.intensity.Override(chromaticIntensity * effectScale);
+
+        _colorAdjustments.active = effectScale > 0f;
+        _colorAdjustments.contrast.Override(contrast * effectScale);
+        _colorAdjustments.saturation.Override(saturation * effectScale);
+        _colorAdjustments.postExposure.Override(postExposure * effectScale);
+    }
+
+    private void ApplyAtmosphere()
+    {
+        VisualQualityConfig.Tier tier = qualityConfig != null && SettingsManager.Instance != null
+            ? qualityConfig.GetTier(SettingsManager.Instance.QualityLevel)
+            : null;
+        bool allowFog = enableFog && (tier == null ? SettingsManager.Instance == null || SettingsManager.Instance.QualityLevel > 0 : tier.fogEnabled);
+        RenderSettings.fog = allowFog;
+        RenderSettings.fogMode = FogMode.Linear;
+        RenderSettings.fogColor = fogColor;
+        RenderSettings.fogStartDistance = fogStartDistance;
+        RenderSettings.fogEndDistance = fogEndDistance;
     }
 }
