@@ -10,10 +10,8 @@ public sealed class AdMobService : IAdService
     private bool _initialized;
     private bool _rewardedReady;
     private bool _interstitialReady;
-    private Action _onRewardComplete;
-    private Action _onRewardFailed;
-
-    public bool IsRewardedAdReady => _rewardedReady;
+    public bool CanShowRewardedAd => _rewardedReady;
+    public bool CanShowInterstitialAd => _interstitialReady;
 
     public void Initialize()
     {
@@ -39,26 +37,23 @@ public sealed class AdMobService : IAdService
         _interstitialReady = true;
     }
 
-    public void ShowRewardedAd(Action onReward, Action onFailed)
+    public void ShowRewardedAd(string placementId, Action<bool> onCompleted)
     {
-        _onRewardComplete = onReward;
-        _onRewardFailed = onFailed;
-
 #if UNITY_ANDROID || UNITY_IOS
         // Uncomment when Google Mobile Ads SDK is imported:
         // if (_rewardedAd != null && _rewardedAd.CanShowAd())
         // {
-        //     _rewardedAd.Show(reward => _onRewardComplete?.Invoke());
+        //     _rewardedAd.Show(reward => onCompleted?.Invoke(true));
         //     return;
         // }
 #endif
 
         // Mock: simulate successful reward for development
         UnityEngine.Debug.Log("[AdMob] Mock rewarded ad shown — granting reward");
-        _onRewardComplete?.Invoke();
+        onCompleted?.Invoke(true);
     }
 
-    public void ShowInterstitial()
+    public void ShowInterstitialAd(string placementId, Action<bool> onClosed)
     {
 #if UNITY_ANDROID || UNITY_IOS
         // Uncomment when Google Mobile Ads SDK is imported:
@@ -66,11 +61,13 @@ public sealed class AdMobService : IAdService
         // {
         //     _interstitialAd.Show();
         //     LoadInterstitialAd(); // preload next
+        //     onClosed?.Invoke(true);
         //     return;
         // }
 #endif
 
         UnityEngine.Debug.Log("[AdMob] Mock interstitial shown");
+        onClosed?.Invoke(true);
     }
 
     // Call these after importing the Google Mobile Ads Unity Plugin:

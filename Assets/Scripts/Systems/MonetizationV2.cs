@@ -31,7 +31,6 @@ public sealed class MonetizationV2 : MonoBehaviour
                                          && ProgressionManager.Instance.TotalRuns >= starterPackRunThreshold;
 
     public event System.Action<int> OnPiggyBankBroken;
-    public event System.Action OnStarterPackShown;
 
     private void Awake()
     {

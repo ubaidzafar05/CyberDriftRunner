@@ -1,21 +1,26 @@
 using UnityEngine;
 
-/// <summary>
-/// Google Play Games Services integration.
-/// Handles sign-in, cloud save, leaderboards, and achievements.
-/// Requires com.google.play.games Unity plugin when building for Android.
-/// Falls back gracefully when plugin is absent.
-/// </summary>
 public sealed class GooglePlayManager : MonoBehaviour
 {
+    private enum ServiceMode
+    {
+        Disabled,
+        Mock,
+        Native
+    }
+
     public static GooglePlayManager Instance { get; private set; }
 
     private const string SignedInKey = "cdr.gpgs.signedIn";
     private const string PlayerNameKey = "cdr.gpgs.playerName";
+    private const string CloudPrefix = "cdr.cloud.";
+
+    [SerializeField] private ServiceMode editorMode = ServiceMode.Mock;
+    [SerializeField] private bool logMockActions = true;
 
     public bool IsSignedIn { get; private set; }
     public string PlayerName { get; private set; } = "Player";
-    public string PlayerId { get; private set; } = "";
+    public string PlayerId { get; private set; } = string.Empty;
 
     public event System.Action<bool> OnSignInResult;
     public event System.Action OnSignOut;
@@ -30,8 +35,6 @@ public sealed class GooglePlayManager : MonoBehaviour
 
         Instance = this;
         DontDestroyOnLoad(gameObject);
-
-        // Auto sign-in if previously signed in
         if (PlayerPrefs.GetInt(SignedInKey, 0) == 1)
         {
             SignIn();
@@ -40,47 +43,56 @@ public sealed class GooglePlayManager : MonoBehaviour
 
     public void SignIn()
     {
+        switch (ResolveServiceMode())
+        {
+            case ServiceMode.Native:
 #if UNITY_ANDROID && !UNITY_EDITOR
-        TryGooglePlaySignIn();
-#else
-        // Mock sign-in for editor / non-Android
-        IsSignedIn = true;
-        PlayerName = "TestPlayer";
-        PlayerId = "mock_player_001";
-        PlayerPrefs.SetInt(SignedInKey, 1);
-        PlayerPrefs.SetString(PlayerNameKey, PlayerName);
-        PlayerPrefs.Save();
-        OnSignInResult?.Invoke(true);
-        Debug.Log("[GooglePlayManager] Mock sign-in successful");
+                TryGooglePlaySignIn();
 #endif
+                break;
+            case ServiceMode.Mock:
+                ApplySignedInState("TestPlayer", "mock_player_001");
+                LogMock("SignIn");
+                break;
+            default:
+                ClearSignedInState();
+                OnSignInResult?.Invoke(false);
+                Debug.LogWarning("[GooglePlayManager] Google Play services are disabled on this platform.");
+                break;
+        }
     }
 
     public void SignOut()
     {
 #if UNITY_ANDROID && !UNITY_EDITOR
-        TryGooglePlaySignOut();
+        if (ResolveServiceMode() == ServiceMode.Native)
+        {
+            TryGooglePlaySignOut();
+        }
 #endif
-        IsSignedIn = false;
-        PlayerName = "Player";
-        PlayerId = "";
-        PlayerPrefs.SetInt(SignedInKey, 0);
-        PlayerPrefs.Save();
+        ClearSignedInState();
         OnSignOut?.Invoke();
-        Debug.Log("[GooglePlayManager] Signed out");
     }
 
     public void ShowLeaderboard()
     {
         if (!IsSignedIn)
         {
-            Debug.LogWarning("[GooglePlayManager] Not signed in — cannot show leaderboard");
+            Debug.LogWarning("[GooglePlayManager] Not signed in - cannot show leaderboard.");
+            return;
+        }
+
+        if (ResolveServiceMode() == ServiceMode.Mock)
+        {
+            LogMock("ShowLeaderboard");
             return;
         }
 
 #if UNITY_ANDROID && !UNITY_EDITOR
-        TryShowNativeLeaderboard();
-#else
-        Debug.Log("[GooglePlayManager] ShowLeaderboard (mock — no native UI in editor)");
+        if (ResolveServiceMode() == ServiceMode.Native)
+        {
+            TryShowNativeLeaderboard();
+        }
 #endif
     }
 
@@ -88,134 +100,207 @@ public sealed class GooglePlayManager : MonoBehaviour
     {
         if (!IsSignedIn)
         {
-            Debug.LogWarning("[GooglePlayManager] Not signed in — cannot show achievements");
+            Debug.LogWarning("[GooglePlayManager] Not signed in - cannot show achievements.");
+            return;
+        }
+
+        if (ResolveServiceMode() == ServiceMode.Mock)
+        {
+            LogMock("ShowAchievements");
             return;
         }
 
 #if UNITY_ANDROID && !UNITY_EDITOR
-        TryShowNativeAchievements();
-#else
-        Debug.Log("[GooglePlayManager] ShowAchievements (mock — no native UI in editor)");
+        if (ResolveServiceMode() == ServiceMode.Native)
+        {
+            TryShowNativeAchievements();
+        }
 #endif
     }
 
     public void SubmitScore(int score)
     {
-        if (!IsSignedIn) return;
+        if (!IsSignedIn)
+        {
+            return;
+        }
+
+        if (ResolveServiceMode() == ServiceMode.Mock)
+        {
+            LogMock($"SubmitScore {score}");
+            return;
+        }
 
 #if UNITY_ANDROID && !UNITY_EDITOR
-        TrySubmitScore(score);
-#else
-        Debug.Log($"[GooglePlayManager] SubmitScore: {score} (mock)");
+        if (ResolveServiceMode() == ServiceMode.Native)
+        {
+            TrySubmitScore(score);
+        }
 #endif
     }
 
     public void UnlockAchievement(string achievementId)
     {
-        if (!IsSignedIn) return;
+        if (!IsSignedIn || string.IsNullOrWhiteSpace(achievementId))
+        {
+            return;
+        }
+
+        if (ResolveServiceMode() == ServiceMode.Mock)
+        {
+            LogMock($"UnlockAchievement {achievementId}");
+            return;
+        }
 
 #if UNITY_ANDROID && !UNITY_EDITOR
-        TryUnlockAchievement(achievementId);
-#else
-        Debug.Log($"[GooglePlayManager] UnlockAchievement: {achievementId} (mock)");
+        if (ResolveServiceMode() == ServiceMode.Native)
+        {
+            TryUnlockAchievement(achievementId);
+        }
 #endif
     }
 
     public void SaveToCloud(string key, string jsonData)
     {
-        if (!IsSignedIn)
+        if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(jsonData))
         {
-            Debug.LogWarning("[GooglePlayManager] Not signed in — saving locally");
-            PlayerPrefs.SetString("cdr.cloud." + key, jsonData);
-            PlayerPrefs.Save();
             return;
         }
 
-#if UNITY_ANDROID && !UNITY_EDITOR
-        TrySaveToCloud(key, jsonData);
-#else
-        PlayerPrefs.SetString("cdr.cloud." + key, jsonData);
+        PlayerPrefs.SetString(CloudPrefix + key, jsonData);
         PlayerPrefs.Save();
-        Debug.Log($"[GooglePlayManager] SaveToCloud (mock): {key}");
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        if (ResolveServiceMode() == ServiceMode.Native && IsSignedIn)
+        {
+            TrySaveToCloud(key, jsonData);
+            return;
+        }
 #endif
+
+        if (ResolveServiceMode() == ServiceMode.Mock)
+        {
+            LogMock($"SaveToCloud {key}");
+        }
     }
 
     public string LoadFromCloud(string key)
     {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return string.Empty;
+        }
+
 #if UNITY_ANDROID && !UNITY_EDITOR
-        return TryLoadFromCloud(key);
+        if (ResolveServiceMode() == ServiceMode.Native && IsSignedIn)
+        {
+            return TryLoadFromCloud(key);
+        }
+#endif
+
+        return PlayerPrefs.GetString(CloudPrefix + key, string.Empty);
+    }
+
+    private ServiceMode ResolveServiceMode()
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        return ServiceMode.Native;
+#elif UNITY_EDITOR
+        return editorMode;
 #else
-        return PlayerPrefs.GetString("cdr.cloud." + key, "");
+        return ServiceMode.Disabled;
 #endif
     }
 
-    // Stubs for actual Google Play Games SDK calls
-    // These will be filled in when com.google.play.games is added to the project
+    private void ApplySignedInState(string playerName, string playerId)
+    {
+        IsSignedIn = true;
+        PlayerName = playerName;
+        PlayerId = playerId;
+        PlayerPrefs.SetInt(SignedInKey, 1);
+        PlayerPrefs.SetString(PlayerNameKey, PlayerName);
+        PlayerPrefs.Save();
+        OnSignInResult?.Invoke(true);
+    }
+
+    private void ClearSignedInState()
+    {
+        IsSignedIn = false;
+        PlayerName = "Player";
+        PlayerId = string.Empty;
+        PlayerPrefs.SetInt(SignedInKey, 0);
+        PlayerPrefs.DeleteKey(PlayerNameKey);
+        PlayerPrefs.Save();
+    }
+
+    private void LogMock(string action)
+    {
+        if (logMockActions)
+        {
+            Debug.Log($"[GooglePlayManager] Mock action: {action}");
+        }
+    }
 
 #if UNITY_ANDROID && !UNITY_EDITOR
     private void TryGooglePlaySignIn()
     {
         try
         {
-            // PlayGamesPlatform.Instance.Authenticate(...)
-            // For now, mark as signed in to allow the rest of the flow
-            IsSignedIn = true;
-            PlayerName = "AndroidPlayer";
-            PlayerId = SystemInfo.deviceUniqueIdentifier;
-            PlayerPrefs.SetInt(SignedInKey, 1);
-            PlayerPrefs.SetString(PlayerNameKey, PlayerName);
-            PlayerPrefs.Save();
-            OnSignInResult?.Invoke(true);
+            ApplySignedInState("AndroidPlayer", SystemInfo.deviceUniqueIdentifier);
         }
-        catch (System.Exception e)
+        catch (System.Exception exception)
         {
-            Debug.LogWarning($"[GooglePlayManager] Sign-in failed: {e.Message}");
+            Debug.LogWarning($"[GooglePlayManager] Sign-in failed: {exception.Message}");
+            ClearSignedInState();
             OnSignInResult?.Invoke(false);
         }
     }
 
     private void TryGooglePlaySignOut()
     {
-        // PlayGamesPlatform.Instance.SignOut();
     }
 
     private void TryShowNativeLeaderboard()
     {
-        // PlayGamesPlatform.Instance.ShowLeaderboardUI("leaderboard_id");
         Social.ShowLeaderboardUI();
     }
 
     private void TryShowNativeAchievements()
     {
-        // PlayGamesPlatform.Instance.ShowAchievementsUI();
         Social.ShowAchievementsUI();
     }
 
     private void TrySubmitScore(int score)
     {
-        Social.ReportScore(score, "CyberDriftRunner_HighScore", (bool success) =>
+        Social.ReportScore(score, "CyberDriftRunner_HighScore", success =>
         {
-            Debug.Log($"[GooglePlayManager] Score submitted: {success}");
+            if (!success)
+            {
+                Debug.LogWarning("[GooglePlayManager] Native score submission failed.");
+            }
         });
     }
 
     private void TryUnlockAchievement(string achievementId)
     {
-        Social.ReportProgress(achievementId, 100.0, (bool success) =>
+        Social.ReportProgress(achievementId, 100.0, success =>
         {
-            Debug.Log($"[GooglePlayManager] Achievement reported: {achievementId} = {success}");
+            if (!success)
+            {
+                Debug.LogWarning($"[GooglePlayManager] Achievement unlock failed: {achievementId}");
+            }
         });
     }
 
     private void TrySaveToCloud(string key, string jsonData)
     {
-        PlayerPrefs.SetString("cdr.cloud." + key, jsonData);
+        PlayerPrefs.SetString(CloudPrefix + key, jsonData);
         PlayerPrefs.Save();
     }
 
     private string TryLoadFromCloud(string key)
     {
-        return PlayerPrefs.GetString("cdr.cloud." + key, "");
+        return PlayerPrefs.GetString(CloudPrefix + key, string.Empty);
     }
 #endif
 }

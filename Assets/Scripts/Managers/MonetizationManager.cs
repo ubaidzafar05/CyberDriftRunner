@@ -3,9 +3,16 @@ using UnityEngine;
 
 public sealed class MonetizationManager : MonoBehaviour
 {
+    private enum ServiceMode
+    {
+        Mock,
+        Disabled,
+        External
+    }
+
     public static MonetizationManager Instance { get; private set; }
 
-    [SerializeField] private bool useMockServices = true;
+    [SerializeField] private ServiceMode serviceMode = ServiceMode.Mock;
 
     private IAdService adService;
     private IStoreService storeService;
@@ -28,7 +35,13 @@ public sealed class MonetizationManager : MonoBehaviour
 
     public void ShowRewardedRevive(Action<bool> onCompleted)
     {
-        adService?.ShowRewardedAd("revive", onCompleted);
+        if (adService == null)
+        {
+            onCompleted?.Invoke(false);
+            return;
+        }
+
+        adService.ShowRewardedAd("revive", onCompleted);
     }
 
     public void ShowInterstitialGameOver()
@@ -59,10 +72,23 @@ public sealed class MonetizationManager : MonoBehaviour
 
     private void InitializeServices()
     {
-        if (useMockServices)
+        switch (serviceMode)
         {
-            adService = new MockAdService();
-            storeService = new MockStoreService();
+            case ServiceMode.Mock:
+                adService = new MockAdService();
+                storeService = new MockStoreService();
+                break;
+            case ServiceMode.Disabled:
+                adService = null;
+                storeService = null;
+                break;
+            case ServiceMode.External:
+#if UNITY_EDITOR
+                Debug.LogWarning("[Monetization] External mode selected, but no production adapters are registered. Falling back to disabled mode.");
+#endif
+                adService = null;
+                storeService = null;
+                break;
         }
 
         adService?.Initialize();

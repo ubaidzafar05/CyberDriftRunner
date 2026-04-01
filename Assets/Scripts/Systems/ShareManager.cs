@@ -2,13 +2,23 @@ using UnityEngine;
 
 public sealed class ShareManager : MonoBehaviour
 {
+    private enum ShareMode
+    {
+        Disabled,
+        Mock,
+        Native
+    }
+
     public static ShareManager Instance { get; private set; }
+
+    [SerializeField] private ShareMode editorMode = ShareMode.Mock;
+    [SerializeField] private bool logMockShares = true;
 
     private void Awake()
     {
         if (Instance != null && Instance != this)
         {
-            Destroy(this);
+            Destroy(gameObject);
             return;
         }
 
@@ -24,12 +34,35 @@ public sealed class ShareManager : MonoBehaviour
 
     private void CaptureAndShare(string text)
     {
+        switch (ResolveShareMode())
+        {
+            case ShareMode.Mock:
+                if (logMockShares)
+                {
+                    Debug.Log($"[Share] {text}");
+                }
+                break;
+            case ShareMode.Native:
 #if UNITY_ANDROID && !UNITY_EDITOR
-        ShareAndroid(text);
+                ShareAndroid(text);
 #elif UNITY_IOS && !UNITY_EDITOR
-        ShareIOS(text);
+                ShareIOS(text);
+#endif
+                break;
+            default:
+                Debug.LogWarning("[ShareManager] Native sharing is disabled on this platform.");
+                break;
+        }
+    }
+
+    private ShareMode ResolveShareMode()
+    {
+#if (UNITY_ANDROID || UNITY_IOS) && !UNITY_EDITOR
+        return ShareMode.Native;
+#elif UNITY_EDITOR
+        return editorMode;
 #else
-        Debug.Log($"[Share] {text}");
+        return ShareMode.Disabled;
 #endif
     }
 
@@ -56,8 +89,6 @@ public sealed class ShareManager : MonoBehaviour
 #if UNITY_IOS
     private static void ShareIOS(string text)
     {
-        // iOS native share via Social framework — requires a native plugin bridge
-        // For now, log and skip
         Debug.Log($"[Share iOS] {text}");
     }
 #endif

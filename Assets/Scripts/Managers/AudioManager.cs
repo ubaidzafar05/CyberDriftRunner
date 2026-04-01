@@ -36,6 +36,7 @@ public sealed class AudioManager : MonoBehaviour
         sfxSource = CreateSource("SfxSource", false, sfxVolume);
         CreateClips();
         SceneManager.sceneLoaded += HandleSceneLoaded;
+        ApplySettings();
         HandleSceneLoaded(SceneManager.GetActiveScene(), LoadSceneMode.Single);
     }
 
@@ -99,6 +100,7 @@ public sealed class AudioManager : MonoBehaviour
 
     private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
     {
+        ApplySettings();
         if (!musicEnabled)
         {
             musicSource.Stop();
@@ -113,6 +115,24 @@ public sealed class AudioManager : MonoBehaviour
 
         musicSource.clip = nextClip;
         musicSource.Play();
+    }
+
+
+    private void ApplySettings()
+    {
+        if (SettingsManager.Instance == null)
+        {
+            return;
+        }
+
+        musicEnabled = SettingsManager.Instance.AudioEnabled;
+        sfxEnabled = SettingsManager.Instance.AudioEnabled;
+        musicVolume = SettingsManager.Instance.MusicVolume;
+        sfxVolume = SettingsManager.Instance.SfxVolume;
+        if (musicSource != null)
+        {
+            musicSource.volume = musicVolume;
+        }
     }
 
     private void PlaySfx(AudioClip clip)

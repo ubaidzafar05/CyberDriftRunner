@@ -2,10 +2,9 @@ using UnityEngine;
 
 public sealed class SettingsManager : MonoBehaviour
 {
-    public static SettingsManager Instance { get; private set; }
-
     private const string MusicVolKey = "cdr.settings.musicVol";
     private const string SfxVolKey = "cdr.settings.sfxVol";
+    private const string AudioEnabledKey = "cdr.settings.audioEnabled";
     private const string VibrationKey = "cdr.vibration";
     private const string QualityKey = "cdr.settings.quality";
     private const string SensitivityKey = "cdr.settings.sensitivity";
@@ -15,11 +14,17 @@ public sealed class SettingsManager : MonoBehaviour
     private const string LeftHandedKey = "cdr.settings.leftHanded";
     private const string NotificationsKey = "cdr.settings.notifications";
     private const string AutoShootKey = "cdr.settings.autoShoot";
+    private const string LegacySoundKey = "cdr.sound";
+
+    public static SettingsManager Instance { get; private set; }
+
+    [SerializeField] private VisualQualityConfig qualityConfig;
 
     public float MusicVolume { get; private set; } = 0.7f;
     public float SfxVolume { get; private set; } = 1f;
+    public bool AudioEnabled { get; private set; } = true;
     public bool VibrationEnabled { get; private set; } = true;
-    public int QualityLevel { get; private set; } = 1; // 0=Low, 1=Medium, 2=High
+    public int QualityLevel { get; private set; } = 1;
     public float SwipeSensitivity { get; private set; } = 1f;
     public bool ScreenShakeEnabled { get; private set; } = true;
     public bool ShowFps { get; private set; }
@@ -41,87 +46,81 @@ public sealed class SettingsManager : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
         Load();
-        ApplyQuality();
+        MigrateLegacyPrefs();
+        ApplyRuntimeSettings();
     }
 
     public void SetMusicVolume(float volume)
     {
         MusicVolume = Mathf.Clamp01(volume);
-        Save();
-        AudioManager.Instance?.SetMusicVolume(MusicVolume);
-        OnSettingsChanged?.Invoke();
+        SaveAndNotify();
     }
 
     public void SetSfxVolume(float volume)
     {
         SfxVolume = Mathf.Clamp01(volume);
-        Save();
-        AudioManager.Instance?.SetSfxVolume(SfxVolume);
-        OnSettingsChanged?.Invoke();
+        SaveAndNotify();
+    }
+
+    public void SetAudioEnabled(bool enabled)
+    {
+        AudioEnabled = enabled;
+        SaveAndNotify();
     }
 
     public void SetVibration(bool enabled)
     {
         VibrationEnabled = enabled;
-        PlayerPrefs.SetInt(VibrationKey, enabled ? 1 : 0);
-        PlayerPrefs.Save();
-        OnSettingsChanged?.Invoke();
+        SaveAndNotify();
     }
 
     public void SetQuality(int level)
     {
         QualityLevel = Mathf.Clamp(level, 0, 2);
-        Save();
-        ApplyQuality();
-        OnSettingsChanged?.Invoke();
+        SaveAndNotify();
     }
 
     public void SetSwipeSensitivity(float sensitivity)
     {
         SwipeSensitivity = Mathf.Clamp(sensitivity, 0.5f, 2f);
-        Save();
-        OnSettingsChanged?.Invoke();
+        SaveAndNotify();
     }
 
     public void SetScreenShake(bool enabled)
     {
         ScreenShakeEnabled = enabled;
-        Save();
-        OnSettingsChanged?.Invoke();
+        SaveAndNotify();
     }
 
     public void SetShowFps(bool show)
     {
         ShowFps = show;
-        Save();
-        OnSettingsChanged?.Invoke();
+        SaveAndNotify();
     }
 
     public void SetLeftHanded(bool leftHanded)
     {
         LeftHandedMode = leftHanded;
-        Save();
-        OnSettingsChanged?.Invoke();
+        SaveAndNotify();
     }
 
     public void SetNotifications(bool enabled)
     {
         NotificationsEnabled = enabled;
-        Save();
-        OnSettingsChanged?.Invoke();
+        SaveAndNotify();
     }
 
     public void SetAutoShoot(bool enabled)
     {
         AutoShootEnabled = enabled;
-        Save();
-        OnSettingsChanged?.Invoke();
+        SaveAndNotify();
     }
 
     public void ResetToDefaults()
     {
         MusicVolume = 0.7f;
         SfxVolume = 1f;
+        AudioEnabled = true;
         VibrationEnabled = true;
         QualityLevel = 1;
         SwipeSensitivity = 1f;
@@ -131,29 +130,52 @@ public sealed class SettingsManager : MonoBehaviour
         NotificationsEnabled = true;
         AutoShootEnabled = false;
         Language = "en";
-        Save();
+        SaveAndNotify();
+    }
+
+    private void ApplyRuntimeSettings()
+    {
         ApplyQuality();
-        OnSettingsChanged?.Invoke();
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.SetAudioEnabled(AudioEnabled);
+            AudioManager.Instance.SetMusicVolume(MusicVolume);
+            AudioManager.Instance.SetSfxVolume(SfxVolume);
+        }
     }
 
     private void ApplyQuality()
     {
+        VisualQualityConfig.Tier tier = qualityConfig != null ? qualityConfig.GetTier(QualityLevel) : null;
+        if (tier != null)
+        {
+            int qualityIndex = Mathf.Clamp(tier.unityQualityLevel, 0, Mathf.Max(0, QualitySettings.names.Length - 1));
+            QualitySettings.SetQualityLevel(qualityIndex, true);
+            Application.targetFrameRate = tier.targetFrameRate;
+            QualitySettings.shadows = tier.shadowQuality;
+            QualitySettings.antiAliasing = tier.antiAliasing;
+            return;
+        }
+
         switch (QualityLevel)
         {
-            case 0: // Low
-                QualitySettings.SetQualityLevel(0);
-                Application.targetFrameRate = 30;
+            case 0:
+                QualitySettings.SetQualityLevel(1, true);
+                Application.targetFrameRate = 45;
                 QualitySettings.shadows = ShadowQuality.Disable;
+                QualitySettings.antiAliasing = 0;
                 break;
-            case 1: // Medium
-                QualitySettings.SetQualityLevel(2);
+            case 1:
+                QualitySettings.SetQualityLevel(3, true);
                 Application.targetFrameRate = 60;
                 QualitySettings.shadows = ShadowQuality.HardOnly;
+                QualitySettings.antiAliasing = 0;
                 break;
-            case 2: // High
-                QualitySettings.SetQualityLevel(4);
+            default:
+                QualitySettings.SetQualityLevel(4, true);
                 Application.targetFrameRate = 60;
                 QualitySettings.shadows = ShadowQuality.All;
+                QualitySettings.antiAliasing = 2;
                 break;
         }
     }
@@ -162,6 +184,7 @@ public sealed class SettingsManager : MonoBehaviour
     {
         MusicVolume = PlayerPrefs.GetFloat(MusicVolKey, 0.7f);
         SfxVolume = PlayerPrefs.GetFloat(SfxVolKey, 1f);
+        AudioEnabled = PlayerPrefs.GetInt(AudioEnabledKey, 1) == 1;
         VibrationEnabled = PlayerPrefs.GetInt(VibrationKey, 1) == 1;
         QualityLevel = PlayerPrefs.GetInt(QualityKey, 1);
         SwipeSensitivity = PlayerPrefs.GetFloat(SensitivityKey, 1f);
@@ -173,10 +196,34 @@ public sealed class SettingsManager : MonoBehaviour
         Language = PlayerPrefs.GetString(LanguageKey, "en");
     }
 
+    private void MigrateLegacyPrefs()
+    {
+        if (!PlayerPrefs.HasKey(LegacySoundKey))
+        {
+            return;
+        }
+
+        if (!PlayerPrefs.HasKey(AudioEnabledKey))
+        {
+            AudioEnabled = PlayerPrefs.GetInt(LegacySoundKey, 1) == 1;
+        }
+
+        PlayerPrefs.DeleteKey(LegacySoundKey);
+        Save();
+    }
+
+    private void SaveAndNotify()
+    {
+        Save();
+        ApplyRuntimeSettings();
+        OnSettingsChanged?.Invoke();
+    }
+
     private void Save()
     {
         PlayerPrefs.SetFloat(MusicVolKey, MusicVolume);
         PlayerPrefs.SetFloat(SfxVolKey, SfxVolume);
+        PlayerPrefs.SetInt(AudioEnabledKey, AudioEnabled ? 1 : 0);
         PlayerPrefs.SetInt(VibrationKey, VibrationEnabled ? 1 : 0);
         PlayerPrefs.SetInt(QualityKey, QualityLevel);
         PlayerPrefs.SetFloat(SensitivityKey, SwipeSensitivity);

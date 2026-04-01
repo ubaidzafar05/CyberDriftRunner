@@ -1,8 +1,12 @@
+using System.Text;
 using UnityEngine;
 
 public sealed class AnalyticsManager : MonoBehaviour
 {
     public static AnalyticsManager Instance { get; private set; }
+
+    [SerializeField] private bool logEventsInEditor = true;
+    [SerializeField] private bool logEventsInPlayerBuilds;
 
     private float _sessionStartTime;
     private int _runsThisSession;
@@ -86,22 +90,33 @@ public sealed class AnalyticsManager : MonoBehaviour
         TrackSessionEnd();
     }
 
-    // Unified event logging — replace with Unity Analytics SDK calls when integrated
-    private static void LogEvent(string eventName, params object[] parameters)
+    private void LogEvent(string eventName, params object[] parameters)
     {
-#if UNITY_EDITOR
-        string paramStr = "";
-        for (int i = 0; i < parameters.Length; i += 2)
+        if (!ShouldLogEvents())
         {
-            if (i + 1 < parameters.Length)
-            {
-                paramStr += $" {parameters[i]}={parameters[i + 1]}";
-            }
+            return;
         }
 
-        Debug.Log($"[Analytics] {eventName}{paramStr}");
+        StringBuilder builder = new StringBuilder(64);
+        builder.Append("[Analytics] ");
+        builder.Append(eventName);
+        for (int i = 0; i + 1 < parameters.Length; i += 2)
+        {
+            builder.Append(' ');
+            builder.Append(parameters[i]);
+            builder.Append('=');
+            builder.Append(parameters[i + 1]);
+        }
+
+        Debug.Log(builder.ToString());
+    }
+
+    private bool ShouldLogEvents()
+    {
+#if UNITY_EDITOR
+        return logEventsInEditor;
+#else
+        return logEventsInPlayerBuilds;
 #endif
-        // TODO: Replace with Unity Analytics or Firebase when SDK is integrated
-        // Unity.Services.Analytics.CustomEvent(eventName, new Dictionary<string, object>{ ... });
     }
 }

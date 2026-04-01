@@ -13,7 +13,6 @@ public sealed class ConsentManager : MonoBehaviour
     public System.Action OnConsentGranted;
 
     private GameObject _consentPanel;
-    private bool _waitingForConsent;
 
     private void Awake()
     {
@@ -33,7 +32,6 @@ public sealed class ConsentManager : MonoBehaviour
     public void ShowConsentDialog()
     {
         if (_consentPanel != null) return;
-        _waitingForConsent = true;
 
         _consentPanel = new GameObject("ConsentPanel");
         Canvas canvas = _consentPanel.AddComponent<Canvas>();
@@ -100,7 +98,6 @@ public sealed class ConsentManager : MonoBehaviour
         PlayerPrefs.SetInt(ConsentKey, 1);
         PlayerPrefs.SetInt("cdr.ads.personalized", 1);
         PlayerPrefs.Save();
-        _waitingForConsent = false;
         if (_consentPanel != null) Destroy(_consentPanel);
         OnConsentGranted?.Invoke();
     }
@@ -110,7 +107,6 @@ public sealed class ConsentManager : MonoBehaviour
         PlayerPrefs.SetInt(ConsentKey, 1);
         PlayerPrefs.SetInt("cdr.ads.personalized", 0);
         PlayerPrefs.Save();
-        _waitingForConsent = false;
         if (_consentPanel != null) Destroy(_consentPanel);
         OnConsentGranted?.Invoke();
     }
