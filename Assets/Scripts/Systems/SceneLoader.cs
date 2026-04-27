@@ -5,6 +5,8 @@ using System.Collections;
 
 public sealed class SceneLoader : MonoBehaviour
 {
+    private const float LoadTimeoutSeconds = 12f;
+
     public static SceneLoader Instance { get; private set; }
 
     private GameObject _loadingScreen;
@@ -37,6 +39,21 @@ public sealed class SceneLoader : MonoBehaviour
         DontDestroyOnLoad(gameObject);
     }
 
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+
+        _isLoading = false;
+        if (_loadingScreen != null)
+        {
+            Destroy(_loadingScreen);
+            _loadingScreen = null;
+        }
+    }
+
     public void LoadScene(string sceneName)
     {
         if (_isLoading) return;
@@ -47,6 +64,7 @@ public sealed class SceneLoader : MonoBehaviour
     {
         _isLoading = true;
         CreateLoadingUI();
+        float startedAt = Time.unscaledTime;
 
         // Fade in
         float fadeIn = 0f;
@@ -60,10 +78,25 @@ public sealed class SceneLoader : MonoBehaviour
 
         // Load async
         AsyncOperation operation = SceneManager.LoadSceneAsync(sceneName);
+        if (operation == null)
+        {
+            Debug.LogError($"[SceneLoader] Failed to start async load for scene '{sceneName}'. Falling back to direct load.");
+            DestroyLoadingUi();
+            _isLoading = false;
+            SceneManager.LoadScene(sceneName);
+            yield break;
+        }
+
         operation.allowSceneActivation = false;
 
         while (operation.progress < 0.9f)
         {
+            if (Time.unscaledTime - startedAt >= LoadTimeoutSeconds)
+            {
+                Debug.LogError($"[SceneLoader] Timed out while loading scene '{sceneName}'. Forcing activation.");
+                break;
+            }
+
             float progress = Mathf.Clamp01(operation.progress / 0.9f);
             UpdateProgress(progress);
             yield return null;
@@ -78,6 +111,12 @@ public sealed class SceneLoader : MonoBehaviour
         // Wait for scene activation
         while (!operation.isDone)
         {
+            if (Time.unscaledTime - startedAt >= LoadTimeoutSeconds)
+            {
+                Debug.LogError($"[SceneLoader] Scene '{sceneName}' exceeded load timeout after activation request.");
+                break;
+            }
+
             yield return null;
         }
 
@@ -90,8 +129,7 @@ public sealed class SceneLoader : MonoBehaviour
             yield return null;
         }
 
-        if (_loadingScreen != null) Destroy(_loadingScreen);
-        _loadingScreen = null;
+        DestroyLoadingUi();
         _isLoading = false;
     }
 
@@ -170,6 +208,17 @@ public sealed class SceneLoader : MonoBehaviour
         string tip = LoadingTips[Random.Range(0, LoadingTips.Length)];
         _tipText = CreateLoadingText(font, $"TIP: {tip}", new Vector2(0f, -100f),
             new Vector2(700f, 60f), 20, new Color(0.7f, 0.8f, 0.9f));
+    }
+
+    private void DestroyLoadingUi()
+    {
+        if (_loadingScreen == null)
+        {
+            return;
+        }
+
+        Destroy(_loadingScreen);
+        _loadingScreen = null;
     }
 
     private Text CreateLoadingText(Font font, string content, Vector2 pos,

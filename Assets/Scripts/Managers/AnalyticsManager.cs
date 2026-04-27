@@ -22,6 +22,19 @@ public sealed class AnalyticsManager : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
         _sessionStartTime = Time.realtimeSinceStartup;
+        EventBus.Subscribe<ShopItemPurchasedEvent>(HandleShopPurchase);
+        EventBus.Subscribe<RunStartedEvent>(HandleRunStarted);
+        EventBus.Subscribe<RunEndedEvent>(HandleRunEnded);
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            EventBus.Unsubscribe<ShopItemPurchasedEvent>(HandleShopPurchase);
+            EventBus.Unsubscribe<RunStartedEvent>(HandleRunStarted);
+            EventBus.Unsubscribe<RunEndedEvent>(HandleRunEnded);
+        }
     }
 
     public void TrackFirstOpen()
@@ -37,12 +50,12 @@ public sealed class AnalyticsManager : MonoBehaviour
     public void TrackRunStart()
     {
         _runsThisSession++;
-        LogEvent("run_start", "run_number", _runsThisSession);
+        LogEvent("game_start", "run_number", _runsThisSession);
     }
 
     public void TrackRunEnd(RunSummary summary)
     {
-        LogEvent("run_end",
+        LogEvent("game_over",
             "score", summary.Score,
             "distance", Mathf.FloorToInt(summary.Distance),
             "credits", summary.Credits,
@@ -51,12 +64,22 @@ public sealed class AnalyticsManager : MonoBehaviour
 
     public void TrackPurchase(string itemId, float price)
     {
-        LogEvent("purchase", "item", itemId, "price", price);
+        LogEvent("purchase_made", "item", itemId, "price", price);
     }
 
     public void TrackAdView(string adType)
     {
-        LogEvent("ad_view", "type", adType);
+        LogEvent("ad_watched", "type", adType);
+    }
+
+    public void TrackReviveUsed(float distance)
+    {
+        LogEvent("revive_used", "distance", Mathf.FloorToInt(distance));
+    }
+
+    public void TrackDistanceReached(int distance)
+    {
+        LogEvent("distance_reached", "distance", distance);
     }
 
     public void TrackAchievement(string achievementId)
@@ -109,6 +132,25 @@ public sealed class AnalyticsManager : MonoBehaviour
         }
 
         Debug.Log(builder.ToString());
+    }
+
+    private void HandleShopPurchase(ShopItemPurchasedEvent payload)
+    {
+        TrackPurchase(payload.ItemId, payload.Price);
+    }
+
+    private void HandleRunStarted(RunStartedEvent payload)
+    {
+        TrackRunStart();
+    }
+
+    private void HandleRunEnded(RunEndedEvent payload)
+    {
+        TrackRunEnd(payload.Summary);
+        if (!string.IsNullOrWhiteSpace(payload.DeathReason))
+        {
+            LogEvent("death_reason", "reason", payload.DeathReason);
+        }
     }
 
     private bool ShouldLogEvents()

@@ -41,6 +41,8 @@ public sealed class ObstacleSpawner : MonoBehaviour
     private readonly int[] laneIndexes = { -1, 0, 1 };
     private float nextSpawnZ;
     private bool encounterSuspended;
+    private float runtimeIntensity = 1f;
+    private float runtimePowerUpBias = 1f;
 
     public float LaneOffset => GetLaneOffset();
 
@@ -76,6 +78,12 @@ public sealed class ObstacleSpawner : MonoBehaviour
     public void SetEncounterSuspended(bool suspended)
     {
         encounterSuspended = suspended;
+    }
+
+    public void ApplyRuntimeTuning(float intensity, float powerUpBias)
+    {
+        runtimeIntensity = Mathf.Clamp(intensity, 0.75f, 1.5f);
+        runtimePowerUpBias = Mathf.Clamp(powerUpBias, 0.7f, 1.4f);
     }
 
     public void SpawnBossMinions(float rowZ, int count)
@@ -121,7 +129,7 @@ public sealed class ObstacleSpawner : MonoBehaviour
 
     private void SpawnEncounter(float rowZ)
     {
-        float progress = Mathf.Clamp01(GameManager.Instance.Distance / 2200f);
+        float progress = Mathf.Clamp01((GameManager.Instance.Distance / 2200f) * runtimeIntensity);
         DistrictProfile district = GetDistrictProfile(GameManager.Instance.Distance);
         int safeLaneIndex = Random.Range(0, laneIndexes.Length);
         int safeLane = laneIndexes[safeLaneIndex];
@@ -175,25 +183,26 @@ public sealed class ObstacleSpawner : MonoBehaviour
 
     private DistrictProfile GetDistrictProfile(float distance)
     {
+        RunDistrictCatalog.DistrictInfo districtInfo = RunDistrictCatalog.Resolve(distance);
         EncounterTuningConfig.DistrictDefinition[] districts = encounterConfig != null ? encounterConfig.Districts : null;
         if (districts == null || districts.Length == 0)
         {
             if (distance < 500f)
             {
-                return new DistrictProfile { Name = "Gateway", DifficultyBias = 0.15f, DroneChance = 0.12f, PowerUpChance = 0.2f, SpacingScale = 1f };
+                return new DistrictProfile { Name = districtInfo.Name, DifficultyBias = 0.15f, DroneChance = 0.12f, PowerUpChance = 0.2f, SpacingScale = 1f };
             }
 
             if (distance < 1200f)
             {
-                return new DistrictProfile { Name = "Commerce Strip", DifficultyBias = 0.35f, DroneChance = 0.2f, PowerUpChance = 0.18f, SpacingScale = 0.95f };
+                return new DistrictProfile { Name = districtInfo.Name, DifficultyBias = 0.35f, DroneChance = 0.2f, PowerUpChance = 0.18f, SpacingScale = 0.95f };
             }
 
             if (distance < 2000f)
             {
-                return new DistrictProfile { Name = "Transit Spine", DifficultyBias = 0.55f, DroneChance = 0.28f, PowerUpChance = 0.16f, SpacingScale = 0.88f };
+                return new DistrictProfile { Name = districtInfo.Name, DifficultyBias = 0.55f, DroneChance = 0.28f, PowerUpChance = 0.16f, SpacingScale = 0.88f };
             }
 
-            return new DistrictProfile { Name = "Security Zone", DifficultyBias = 0.78f, DroneChance = 0.34f, PowerUpChance = 0.14f, SpacingScale = 0.82f };
+            return new DistrictProfile { Name = districtInfo.Name, DifficultyBias = 0.78f, DroneChance = 0.34f, PowerUpChance = 0.14f, SpacingScale = 0.82f };
         }
 
         EncounterTuningConfig.DistrictDefinition current = districts[0];
@@ -209,7 +218,7 @@ public sealed class ObstacleSpawner : MonoBehaviour
 
         return new DistrictProfile
         {
-            Name = string.IsNullOrWhiteSpace(current.name) ? "District" : current.name,
+            Name = districtInfo.Name,
             DifficultyBias = current.difficultyBias,
             DroneChance = current.droneChance,
             PowerUpChance = current.powerUpChance,
@@ -355,6 +364,7 @@ public sealed class ObstacleSpawner : MonoBehaviour
     private void SpawnCollectibleCorridor(float rowZ, int lane, DistrictProfile district, float progress, int creditCount)
     {
         bool spawnPowerUp = powerUpPrefabs != null && powerUpPrefabs.Length > 0 && Random.value < district.PowerUpChance;
+        spawnPowerUp &= Random.value < runtimePowerUpBias;
         if (spawnPowerUp)
         {
             GameObject powerUpPrefab = powerUpPrefabs[Random.Range(0, powerUpPrefabs.Length)];
@@ -367,9 +377,11 @@ public sealed class ObstacleSpawner : MonoBehaviour
             return;
         }
 
-        for (int i = 0; i < creditCount; i++)
+        int resolvedCreditCount = progress < 0.2f ? Mathf.Max(creditCount, 5 + Random.Range(0, 2)) : creditCount;
+        for (int i = 0; i < resolvedCreditCount; i++)
         {
-            float arcHeight = 1.1f + Mathf.Sin((i / Mathf.Max(1f, creditCount - 1f)) * Mathf.PI) * Mathf.Lerp(0.15f, 0.45f, progress);
+            float arcProgress = i / Mathf.Max(1f, resolvedCreditCount - 1f);
+            float arcHeight = 1.1f + Mathf.Sin(arcProgress * Mathf.PI) * Mathf.Lerp(0.3f, 0.6f, progress);
             Vector3 position = GetLanePosition(lane, rowZ + (i * 1.25f)) + Vector3.up * arcHeight;
             GetPool(creditPrefab, GetCollectiblePreload()).Acquire(position, Quaternion.identity);
         }
@@ -379,7 +391,8 @@ public sealed class ObstacleSpawner : MonoBehaviour
     {
         DistrictProfile district = GetDistrictProfile(GameManager.Instance.Distance);
         float difficulty = Mathf.Clamp01(GameManager.Instance.Distance / 2000f);
-        return Mathf.Lerp(GetMaxRowSpacing(), GetMinRowSpacing(), difficulty) * district.SpacingScale;
+        float spacing = Mathf.Lerp(GetMaxRowSpacing(), GetMinRowSpacing(), difficulty) * district.SpacingScale;
+        return spacing / runtimeIntensity;
     }
 
     private Vector3 GetLanePosition(int lane, float zPosition)

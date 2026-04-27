@@ -25,6 +25,7 @@ public sealed class ProgressionManager : MonoBehaviour
     public int TotalRuns { get; private set; }
     public float TotalDistance { get; private set; }
     public int TotalDronesDestroyed { get; private set; }
+    public IEnumerable<string> UnlockedSkinIds => _unlockedSkinIds;
 
     private void Awake()
     {
@@ -101,6 +102,7 @@ public sealed class ProgressionManager : MonoBehaviour
         SoftCurrency += amount;
         if (SoftCurrency < 0) SoftCurrency = 0;
         Save();
+        EventBus.Publish(new CurrencyChangedEvent(SoftCurrency, EconomySystem.Instance != null ? EconomySystem.Instance.PremiumCurrency : 0));
     }
 
     public bool CommitRunStats(RunSummary summary)
@@ -129,16 +131,16 @@ public sealed class ProgressionManager : MonoBehaviour
 
     private void Load()
     {
-        SoftCurrency = PlayerPrefs.GetInt(SoftCurrencyKey, 0);
-        SelectedSkinId = PlayerPrefs.GetString(SelectedSkinKey, _skins[0].Id);
-        HighScore = PlayerPrefs.GetInt(HighScoreKey, 0);
-        BestDistance = PlayerPrefs.GetFloat(BestDistanceKey, 0f);
-        TotalRuns = PlayerPrefs.GetInt(TotalRunsKey, 0);
-        TotalDistance = PlayerPrefs.GetFloat(TotalDistanceKey, 0f);
-        TotalDronesDestroyed = PlayerPrefs.GetInt(TotalDronesKey, 0);
+        SoftCurrency = SecurePrefs.GetInt(SoftCurrencyKey, 0);
+        SelectedSkinId = SecurePrefs.GetString(SelectedSkinKey, _skins[0].Id);
+        HighScore = SecurePrefs.GetInt(HighScoreKey, 0);
+        BestDistance = SecurePrefs.GetFloat(BestDistanceKey, 0f);
+        TotalRuns = SecurePrefs.GetInt(TotalRunsKey, 0);
+        TotalDistance = SecurePrefs.GetFloat(TotalDistanceKey, 0f);
+        TotalDronesDestroyed = SecurePrefs.GetInt(TotalDronesKey, 0);
         _unlockedSkinIds.Clear();
 
-        string[] tokens = PlayerPrefs.GetString(UnlockedSkinsKey, _skins[0].Id).Split('|');
+        string[] tokens = SecurePrefs.GetString(UnlockedSkinsKey, _skins[0].Id).Split('|');
         for (int i = 0; i < tokens.Length; i++)
         {
             if (!string.IsNullOrWhiteSpace(tokens[i]))
@@ -156,15 +158,15 @@ public sealed class ProgressionManager : MonoBehaviour
 
     private void Save()
     {
-        PlayerPrefs.SetInt(SoftCurrencyKey, SoftCurrency);
-        PlayerPrefs.SetString(SelectedSkinKey, SelectedSkinId);
-        PlayerPrefs.SetString(UnlockedSkinsKey, string.Join("|", _unlockedSkinIds));
-        PlayerPrefs.SetInt(HighScoreKey, HighScore);
-        PlayerPrefs.SetFloat(BestDistanceKey, BestDistance);
-        PlayerPrefs.SetInt(TotalRunsKey, TotalRuns);
-        PlayerPrefs.SetFloat(TotalDistanceKey, TotalDistance);
-        PlayerPrefs.SetInt(TotalDronesKey, TotalDronesDestroyed);
-        PlayerPrefs.Save();
+        SecurePrefs.SetInt(SoftCurrencyKey, SoftCurrency);
+        SecurePrefs.SetString(SelectedSkinKey, SelectedSkinId);
+        SecurePrefs.SetString(UnlockedSkinsKey, string.Join("|", _unlockedSkinIds));
+        SecurePrefs.SetInt(HighScoreKey, HighScore);
+        SecurePrefs.SetFloat(BestDistanceKey, BestDistance);
+        SecurePrefs.SetInt(TotalRunsKey, TotalRuns);
+        SecurePrefs.SetFloat(TotalDistanceKey, TotalDistance);
+        SecurePrefs.SetInt(TotalDronesKey, TotalDronesDestroyed);
+        SecurePrefs.Save();
     }
 
     private SkinDefinition FindSkin(string skinId)

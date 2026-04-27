@@ -13,10 +13,11 @@ public sealed class PlayerVfxController : MonoBehaviour
     private ParticleSystem[] _burstPool;
     private ParticleSystem _speedStream;
     private int _burstIndex;
+    private Color _shopBurstColor = new Color(0.2f, 1f, 1f, 1f);
 
     private void Awake()
     {
-        targetRenderer = targetRenderer == null ? GetComponentInChildren<Renderer>() : targetRenderer;
+        RefreshTargetRenderer();
         trailRenderer = trailRenderer == null ? CreateTrail() : trailRenderer;
         _runtimeMaterial = targetRenderer != null ? targetRenderer.material : null;
         _speedStream = CreateSpeedStream();
@@ -26,26 +27,77 @@ public sealed class PlayerVfxController : MonoBehaviour
             _burstPool[i] = CreatePooledBurst(i);
         }
 
+        ApplyShopCosmetics();
         SetHackState(false);
+    }
+
+    private void Start()
+    {
+        RefreshTargetRenderer();
+        _runtimeMaterial = targetRenderer != null ? targetRenderer.material : _runtimeMaterial;
     }
 
     public void OnJump() => EmitBurst(Color.cyan, 18);
     public void OnSlide() => EmitBurst(new Color(1f, 0.4f, 1f), 16);
-    public void OnShoot() => EmitBurst(new Color(0.2f, 1f, 1f), 12);
+    public void OnShoot() => OnShoot(WeaponType.Pulse);
+    public void OnShoot(WeaponType weaponType)
+    {
+        switch (weaponType)
+        {
+            case WeaponType.Burst:
+                EmitBurst(new Color(1f, 0.5f, 0.22f), 16);
+                break;
+            case WeaponType.Spread:
+                EmitBurst(new Color(0.46f, 0.92f, 1f), 18);
+                break;
+            case WeaponType.Plasma:
+                EmitBurst(new Color(1f, 0.48f, 0.18f), 24);
+                break;
+            default:
+                EmitBurst(new Color(0.2f, 1f, 1f), 12);
+                break;
+        }
+    }
     public void OnHit() => EmitBurst(new Color(1f, 0.2f, 0.4f), 20);
-    public void OnPowerUp() => EmitBurst(new Color(1f, 0.9f, 0.2f), 24);
+    public void OnPowerUp() => OnPowerUp(PowerUpType.Shield);
+    public void OnPowerUp(PowerUpType powerUpType)
+    {
+        switch (powerUpType)
+        {
+            case PowerUpType.DoubleScore:
+                EmitBurst(new Color(1f, 0.82f, 0.16f), 28);
+                break;
+            case PowerUpType.SlowMotion:
+                EmitBurst(new Color(0.44f, 0.82f, 1f), 28);
+                break;
+            case PowerUpType.EmpBlast:
+                EmitBurst(new Color(1f, 0.22f, 0.72f), 34);
+                break;
+            case PowerUpType.Magnet:
+                EmitBurst(new Color(0.34f, 1f, 0.7f), 26);
+                break;
+            case PowerUpType.SpeedBoost:
+                EmitBurst(new Color(1f, 0.5f, 0.16f), 30);
+                break;
+            default:
+                EmitBurst(new Color(0.2f, 1f, 1f), 24);
+                break;
+        }
+    }
     public void OnRevive() => EmitBurst(new Color(0.6f, 1f, 0.6f), 28);
 
     public void SetHackState(bool active)
     {
+        Color trailStart = trailRenderer != null ? trailRenderer.startColor : new Color(0.2f, 0.8f, 1f, 0.32f);
+        Color trailEnd = trailRenderer != null ? trailRenderer.endColor : new Color(0.2f, 1f, 1f, 0f);
         if (trailRenderer != null)
         {
             trailRenderer.emitting = active;
             trailRenderer.time = active ? 0.52f : 0.12f;
             trailRenderer.startWidth = active ? 0.7f : 0.38f;
             trailRenderer.endWidth = active ? 0.12f : 0.04f;
-            trailRenderer.startColor = active ? new Color(0.2f, 1f, 1f, 0.96f) : new Color(0.2f, 0.8f, 1f, 0.32f);
-            trailRenderer.endColor = active ? new Color(0.42f, 0f, 1f, 0f) : new Color(0.2f, 1f, 1f, 0f);
+            trailRenderer.startColor = active ? trailStart.WithAlpha(0.96f) : trailStart.WithAlpha(0.32f);
+            trailRenderer.endColor = trailEnd;
         }
 
         if (_speedStream != null)
@@ -95,6 +147,60 @@ public sealed class PlayerVfxController : MonoBehaviour
 
         trail.emitting = false;
         return trail;
+    }
+
+    private void RefreshTargetRenderer()
+    {
+        PlayerSkinApplier skinApplier = GetComponent<PlayerSkinApplier>();
+        if (skinApplier != null && skinApplier.PrimaryRenderer != null)
+        {
+            targetRenderer = skinApplier.PrimaryRenderer;
+            return;
+        }
+
+        if (targetRenderer == null)
+        {
+            targetRenderer = GetComponentInChildren<Renderer>();
+        }
+    }
+
+    public void ApplyShopCosmetics()
+    {
+        string selectedTrail = ShopSystem.Instance != null ? ShopSystem.Instance.SelectedTrailId : "trail_default";
+        TrailCosmeticProfile profile = ShopCosmeticPalette.GetTrailProfile(selectedTrail);
+        _shopBurstColor = profile.BurstColor;
+
+        if (trailRenderer != null)
+        {
+            trailRenderer.startColor = profile.StartColor.WithAlpha(0.32f);
+            trailRenderer.endColor = profile.EndColor;
+            Material trailMat = trailRenderer.material;
+            trailMat.color = profile.StartColor;
+            if (trailMat.HasProperty("_EmissionColor"))
+            {
+                trailMat.EnableKeyword("_EMISSION");
+                trailMat.SetColor("_EmissionColor", profile.StartColor * 1.6f);
+            }
+        }
+
+        if (_speedStream != null)
+        {
+            var colorOverLifetime = _speedStream.colorOverLifetime;
+            colorOverLifetime.enabled = true;
+            Gradient gradient = new Gradient();
+            gradient.SetKeys(
+                new[]
+                {
+                    new GradientColorKey(profile.StartColor, 0f),
+                    new GradientColorKey(profile.EndColor.WithAlpha(1f), 1f)
+                },
+                new[]
+                {
+                    new GradientAlphaKey(0.8f, 0f),
+                    new GradientAlphaKey(0f, 1f)
+                });
+            colorOverLifetime.color = gradient;
+        }
     }
 
     private ParticleSystem CreateSpeedStream()
@@ -191,8 +297,17 @@ public sealed class PlayerVfxController : MonoBehaviour
 
         system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         var main = system.main;
-        main.startColor = color;
+        main.startColor = Color.Lerp(color, _shopBurstColor, 0.35f);
         main.maxParticles = particles;
         system.Emit(particles);
+    }
+}
+
+public static class ColorExtensions
+{
+    public static Color WithAlpha(this Color color, float alpha)
+    {
+        color.a = alpha;
+        return color;
     }
 }

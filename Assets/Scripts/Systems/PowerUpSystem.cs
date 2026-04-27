@@ -94,7 +94,7 @@ public sealed class PowerUpSystem : MonoBehaviour
             return;
         }
 
-        GameManager.Instance.SetScoreMultiplier(doubleScoreTimeLeft > 0f ? 2 : 1);
+        GameManager.Instance.SetPowerUpScoreMultiplier(doubleScoreTimeLeft > 0f ? 2 : 1);
         GameManager.Instance.SetPowerUpSlowMotion(slowMotionTimeLeft > 0f, slowMotionScale);
         GameManager.Instance.SetActivePowerUp(GetPowerUpLabel(), GetLongestRemainingTime());
     }

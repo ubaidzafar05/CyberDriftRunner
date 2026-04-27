@@ -182,18 +182,18 @@ public sealed class SettingsManager : MonoBehaviour
 
     private void Load()
     {
-        MusicVolume = PlayerPrefs.GetFloat(MusicVolKey, 0.7f);
-        SfxVolume = PlayerPrefs.GetFloat(SfxVolKey, 1f);
-        AudioEnabled = PlayerPrefs.GetInt(AudioEnabledKey, 1) == 1;
-        VibrationEnabled = PlayerPrefs.GetInt(VibrationKey, 1) == 1;
-        QualityLevel = PlayerPrefs.GetInt(QualityKey, 1);
-        SwipeSensitivity = PlayerPrefs.GetFloat(SensitivityKey, 1f);
-        ScreenShakeEnabled = PlayerPrefs.GetInt(ScreenShakeKey, 1) == 1;
-        ShowFps = PlayerPrefs.GetInt(ShowFpsKey, 0) == 1;
-        LeftHandedMode = PlayerPrefs.GetInt(LeftHandedKey, 0) == 1;
-        NotificationsEnabled = PlayerPrefs.GetInt(NotificationsKey, 1) == 1;
-        AutoShootEnabled = PlayerPrefs.GetInt(AutoShootKey, 0) == 1;
-        Language = PlayerPrefs.GetString(LanguageKey, "en");
+        MusicVolume = SecurePrefs.GetFloat(MusicVolKey, 0.7f);
+        SfxVolume = SecurePrefs.GetFloat(SfxVolKey, 1f);
+        AudioEnabled = SecurePrefs.GetBool(AudioEnabledKey, true);
+        VibrationEnabled = SecurePrefs.GetBool(VibrationKey, true);
+        QualityLevel = SecurePrefs.GetInt(QualityKey, 1);
+        SwipeSensitivity = SecurePrefs.GetFloat(SensitivityKey, 1f);
+        ScreenShakeEnabled = SecurePrefs.GetBool(ScreenShakeKey, true);
+        ShowFps = SecurePrefs.GetBool(ShowFpsKey, false);
+        LeftHandedMode = SecurePrefs.GetBool(LeftHandedKey, false);
+        NotificationsEnabled = SecurePrefs.GetBool(NotificationsKey, true);
+        AutoShootEnabled = SecurePrefs.GetBool(AutoShootKey, false);
+        Language = SecurePrefs.GetString(LanguageKey, "en");
     }
 
     private void MigrateLegacyPrefs()
@@ -221,18 +221,18 @@ public sealed class SettingsManager : MonoBehaviour
 
     private void Save()
     {
-        PlayerPrefs.SetFloat(MusicVolKey, MusicVolume);
-        PlayerPrefs.SetFloat(SfxVolKey, SfxVolume);
-        PlayerPrefs.SetInt(AudioEnabledKey, AudioEnabled ? 1 : 0);
-        PlayerPrefs.SetInt(VibrationKey, VibrationEnabled ? 1 : 0);
-        PlayerPrefs.SetInt(QualityKey, QualityLevel);
-        PlayerPrefs.SetFloat(SensitivityKey, SwipeSensitivity);
-        PlayerPrefs.SetInt(ScreenShakeKey, ScreenShakeEnabled ? 1 : 0);
-        PlayerPrefs.SetInt(ShowFpsKey, ShowFps ? 1 : 0);
-        PlayerPrefs.SetInt(LeftHandedKey, LeftHandedMode ? 1 : 0);
-        PlayerPrefs.SetInt(NotificationsKey, NotificationsEnabled ? 1 : 0);
-        PlayerPrefs.SetInt(AutoShootKey, AutoShootEnabled ? 1 : 0);
-        PlayerPrefs.SetString(LanguageKey, Language);
-        PlayerPrefs.Save();
+        SecurePrefs.SetFloat(MusicVolKey, MusicVolume);
+        SecurePrefs.SetFloat(SfxVolKey, SfxVolume);
+        SecurePrefs.SetBool(AudioEnabledKey, AudioEnabled);
+        SecurePrefs.SetBool(VibrationKey, VibrationEnabled);
+        SecurePrefs.SetInt(QualityKey, QualityLevel);
+        SecurePrefs.SetFloat(SensitivityKey, SwipeSensitivity);
+        SecurePrefs.SetBool(ScreenShakeKey, ScreenShakeEnabled);
+        SecurePrefs.SetBool(ShowFpsKey, ShowFps);
+        SecurePrefs.SetBool(LeftHandedKey, LeftHandedMode);
+        SecurePrefs.SetBool(NotificationsKey, NotificationsEnabled);
+        SecurePrefs.SetBool(AutoShootKey, AutoShootEnabled);
+        SecurePrefs.SetString(LanguageKey, Language);
+        SecurePrefs.Save();
     }
 }

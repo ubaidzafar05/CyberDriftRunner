@@ -28,6 +28,7 @@ public sealed class LevelChunkGenerator : MonoBehaviour
     private readonly Dictionary<GameObject, ObjectPool> _pools = new Dictionary<GameObject, ObjectPool>();
     private readonly Queue<ActiveChunk> _activeChunks = new Queue<ActiveChunk>();
     private float _nextSpawnZ;
+    private bool _loggedConfigurationError;
 
     public void Configure(PlayerController targetPlayer, LevelChunkSet[] sets, Transform root)
     {
@@ -47,6 +48,7 @@ public sealed class LevelChunkGenerator : MonoBehaviour
 
     private void Start()
     {
+        ValidateConfiguration();
         WarmPools();
         _nextSpawnZ = 0f;
     }
@@ -118,6 +120,7 @@ public sealed class LevelChunkGenerator : MonoBehaviour
 
         if (set.ChunkPrefabs == null || set.ChunkPrefabs.Length == 0)
         {
+            LogConfigurationError($"Chunk set '{set.Name}' has no prefabs.");
             return null;
         }
 
@@ -128,6 +131,7 @@ public sealed class LevelChunkGenerator : MonoBehaviour
     {
         if (chunkSets == null)
         {
+            LogConfigurationError("No chunk sets are configured.");
             return;
         }
 
@@ -147,6 +151,41 @@ public sealed class LevelChunkGenerator : MonoBehaviour
                 }
             }
         }
+    }
+
+    private void ValidateConfiguration()
+    {
+        if (chunkSets == null || chunkSets.Length == 0)
+        {
+            LogConfigurationError("No chunk sets are configured.");
+            return;
+        }
+
+        for (int i = 0; i < chunkSets.Length; i++)
+        {
+            if (chunkSets[i] == null)
+            {
+                LogConfigurationError($"Chunk set at index {i} is null.");
+                return;
+            }
+
+            if (chunkSets[i].ChunkPrefabs == null || chunkSets[i].ChunkPrefabs.Length == 0)
+            {
+                LogConfigurationError($"Chunk set '{chunkSets[i].Name}' has no prefabs.");
+                return;
+            }
+        }
+    }
+
+    private void LogConfigurationError(string message)
+    {
+        if (_loggedConfigurationError)
+        {
+            return;
+        }
+
+        Debug.LogError($"LevelChunkGenerator configuration error: {message}", this);
+        _loggedConfigurationError = true;
     }
 
     private ObjectPool GetPool(GameObject prefab)

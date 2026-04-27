@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7b74b7d01cd9406da672a92f05584cf, type: 3}
+  m_Name: VisualAssetCatalog
+  m_EditorClassIdentifier: Assembly-CSharp::VisualAssetCatalog
+  playerPrefab: {fileID: 5937682097792914700, guid: aee40e035a7ee438eb649961ba534285, type: 3}
+  projectilePrefab: {fileID: 3209310808411855449, guid: a3756c0ca6de94d4aa29faa07f5a9dd7, type: 3}
+  barrierPrefab: {fileID: 3849892345336553300, guid: 2ddc27a81532c4e939d72ab2b74852bb, type: 3}
+  carPrefab: {fileID: 7343979075343781196, guid: 6ceaa31ac5290420f8692256ece2d643, type: 3}
+  dronePrefab: {fileID: 3458004382062664453, guid: cf041695ac1a941ffb84bb1576c9831d, type: 3}
+  bossPrefab: {fileID: 3452235808544125618, guid: 2160c5bb6fb00462eaf4833f4fffe2d4, type: 3}
+  bossHazardPrefab: {fileID: 995673033083389289, guid: 7512fb55ba6084954b15781aea8c2c1f, type: 3}
+  bossStagePrefab: {fileID: 8515028949270794025, guid: 6824611ca3d584a848bc1915f81a71a5, type: 3}
+  creditPrefab: {fileID: 4597078648780245025, guid: ce78c2343454d4fbc96729abb11e025a, type: 3}
+  powerUpPrefabs:
+  - {fileID: 5334221633597632359, guid: 1db146fcfde104df7abab0625ccef33e, type: 3}
+  - {fileID: 3902063749703269394, guid: 497ba99c7fcc04016bd45875d8bb24a5, type: 3}
+  - {fileID: 4246641002838994088, guid: dc56d310075ec4a409f2022bb6c61e8b, type: 3}
+  - {fileID: 1724360243976630409, guid: 283838f8deea24a19989d640cbf0245b, type: 3}
+  - {fileID: 1783982397552097549, guid: e429ae04114234b629118f7ed27d0316, type: 3}
+  - {fileID: 217665018098950873, guid: 964cc51b4bd9f4a0582ccc47f269e8a9, type: 3}
+  gatewayChunks:
+  - {fileID: 310234516259225268, guid: 02094d8e4e6c94cc9aaa9c5d0189b572, type: 3}
+  - {fileID: 1364403886305581050, guid: e3a91de27d8dd40ddad62574b66f92b4, type: 3}
+  - {fileID: 5641014119870477925, guid: 2033503d6f972483a803bdc6340a9ca6, type: 3}
+  commerceChunks:
+  - {fileID: 2618472555390969994, guid: 8a3b8787a379d4e38b111e0ddb87a5a5, type: 3}
+  - {fileID: 570106170350606676, guid: 7efc28b42ab0b463a81138dbe9b3d14c, type: 3}
+  - {fileID: 2013473065434151754, guid: 9463f9a0c3e924d4b90a5f168df2fbff, type: 3}
+  securityChunks:
+  - {fileID: 5952884232659722114, guid: 748aa04e6b337413790da53e1c7f27ac, type: 3}
+  - {fileID: 8417266606826794199, guid: 16428e6621cab4460ba7cd4b600207a3, type: 3}
+  - {fileID: 3266969507689021351, guid: 901613982451f42dcbaaabc0e0c68664, type: 3}
+  roadMaterial: {fileID: 2100000, guid: 534cecb06b58a4949940c4b757e4b6e4, type: 2}
+  accentMaterial: {fileID: 2100000, guid: bb32f75b9a1e1484db2ddd7d9aa7eb2d, type: 2}
+  alternateAccentMaterial: {fileID: 2100000, guid: 8c42575cdf8f14d86894d3b7686cfdf3, type: 2}
+  tertiaryAccentMaterial: {fileID: 2100000, guid: 8afa9773aab06409ba2d39c3eb11ee4a, type: 2}
+  warningMaterial: {fileID: 2100000, guid: 6eedfa80f16af419bb9c8adb7bb07e5f, type: 2}
+  allowGeneratedFallbacks: 0

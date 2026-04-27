@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -36,17 +37,25 @@ public sealed class GameManager : MonoBehaviour
     [Header("Scoring")]
     [SerializeField] private float scoreRatePerSecond = 12f;
     [SerializeField] private float distanceScale = 1f;
+    [SerializeField] private float openingScoreBoostDuration = 12f;
+    [SerializeField] private float openingScoreBoostMultiplier = 1.25f;
+
+    [Header("Death Flow")]
+    [SerializeField] private float revivePromptTimeout = 8f;
+    [SerializeField] private float deathResolutionTimeout = 1.15f;
 
     private float hackTimeScale = 1f;
     private float powerUpTimeScale = 1f;
-    private float cinematicTimeScale = 1f;
-    private int scoreMultiplier = 1;
+    private int powerUpScoreMultiplier = 1;
+    private int feverScoreMultiplier = 1;
     private float scoreRemainder;
-    private bool hasUsedRevive;
+    private bool doubleRewardsGranted;
     private bool runRewardsCommitted;
-    private PlayerController pendingRevivePlayer;
+    private string pendingDeathReason = "unknown";
+    private int nextDistanceAnalyticsMilestone = 500;
+    private RunFlowController _runFlow;
 
-    public GameState State { get; private set; } = GameState.Menu;
+    public GameState State => _runFlow != null ? _runFlow.State : GameState.Menu;
     public RunSummary LastRunSummary { get; private set; }
     public PlayerController Player { get; private set; }
     public BossController ActiveBoss { get; private set; }
@@ -59,8 +68,9 @@ public sealed class GameManager : MonoBehaviour
     public int PowerUpsUsedThisRun { get; private set; }
     public int BossesDefeatedThisRun { get; private set; }
     public bool IsBossEncounterActive { get; private set; }
-    public bool IsRunInteractive => State == GameState.Playing;
-    public bool IsRunPaused => State == GameState.Paused || State == GameState.RevivePrompt;
+    public bool IsRunInteractive => _runFlow != null && _runFlow.IsRunInteractive;
+    public bool IsRunPaused => _runFlow != null && _runFlow.IsRunPaused;
+    public bool HasUsedRevive => _runFlow != null && _runFlow.HasUsedRevive;
     public float CurrentForwardSpeed
     {
         get
@@ -85,9 +95,16 @@ public sealed class GameManager : MonoBehaviour
         }
     }
 
-    public int ScoreMultiplier => scoreMultiplier;
+    public int ScoreMultiplier => GetResolvedScoreMultiplier();
+    public bool IsOpeningMoments => SurvivalTime < openingScoreBoostDuration;
     public string ActivePowerUpLabel { get; private set; } = "Ready";
     public float ActivePowerUpTimeLeft { get; private set; }
+    public string LastRunRewardTitle { get; private set; } = "Run Cache";
+    public string LastRunRewardDetail { get; private set; } = "Push deeper to unlock district rewards.";
+    public string LastRunDistrictName { get; private set; } = "Neon Gateway";
+    public string LastRunGrade { get; private set; } = "C";
+    public int LastRunBossCredits { get; private set; }
+    public string CurrentDistrictName => RunDistrictCatalog.ResolveName(Distance);
 
     public event System.Action<bool, BossController> OnBossEncounterChanged;
 
@@ -100,6 +117,7 @@ public sealed class GameManager : MonoBehaviour
         }
 
         Instance = this;
+        _runFlow = new RunFlowController(revivePromptTimeout, deathResolutionTimeout);
         DontDestroyOnLoad(gameObject);
         SceneManager.sceneLoaded += HandleSceneLoaded;
         RefreshTimeScale();
@@ -117,6 +135,7 @@ public sealed class GameManager : MonoBehaviour
 
     private void Update()
     {
+        HandleRunFlowOutcome(_runFlow.Update(Time.unscaledTime, CanOfferRevive()));
         if (State != GameState.Playing)
         {
             return;
@@ -125,7 +144,7 @@ public sealed class GameManager : MonoBehaviour
         float deltaTime = Time.deltaTime;
         SurvivalTime += deltaTime;
         Distance += CurrentForwardSpeed * deltaTime * GetDistanceScale();
-        scoreRemainder += GetScoreRatePerSecond() * scoreMultiplier * deltaTime;
+        scoreRemainder += GetScoreRatePerSecond() * ScoreMultiplier * deltaTime;
 
         int scoreGain = Mathf.FloorToInt(scoreRemainder);
         if (scoreGain > 0)
@@ -134,24 +153,30 @@ public sealed class GameManager : MonoBehaviour
             scoreRemainder -= scoreGain;
         }
 
-        if (ActivePowerUpTimeLeft > 0f)
+        int distanceInt = Mathf.FloorToInt(Distance);
+        if (distanceInt >= nextDistanceAnalyticsMilestone)
         {
-            ActivePowerUpTimeLeft = Mathf.Max(0f, ActivePowerUpTimeLeft - Time.unscaledDeltaTime);
+            AnalyticsManager.Instance?.TrackDistanceReached(nextDistanceAnalyticsMilestone);
+            nextDistanceAnalyticsMilestone += 500;
         }
     }
 
     public void RegisterPlayer(PlayerController player)
     {
         Player = player;
+        GhostRunManager.Instance?.BindPlayer(player);
     }
 
     public void StartRun()
     {
         ResetRunState();
-        State = GameState.Playing;
-        AnalyticsManager.Instance?.TrackRunStart();
+        LimitedTimeEventSystem.Instance?.RefreshNow();
+        LiveOpsSystem.Instance?.Refresh();
+        GhostRunManager.Instance?.PrepareForNewRun();
+        _runFlow.StartRun();
         MonetizationV2.Instance?.OnRunStarted();
         RefreshTimeScale();
+        EventBus.Publish(new RunStartedEvent((ProgressionManager.Instance?.TotalRuns ?? 0) + 1));
         LoadSceneSafe(SceneNames.GameScene);
     }
 
@@ -163,84 +188,52 @@ public sealed class GameManager : MonoBehaviour
     public void ReturnToMenu()
     {
         ResetRunState();
-        State = GameState.Menu;
+        _runFlow.ResetToMenu();
         RefreshTimeScale();
         LoadSceneSafe(SceneNames.MainMenu);
     }
 
     public bool TryPauseRun()
     {
-        if (State != GameState.Playing)
+        if (!_runFlow.TryPause())
         {
             return false;
         }
 
-        State = GameState.Paused;
         RefreshTimeScale();
         return true;
     }
 
     public bool ResumeRun()
     {
-        if (State != GameState.Paused)
+        if (!_runFlow.Resume())
         {
             return false;
         }
 
-        State = GameState.Playing;
         RefreshTimeScale();
         return true;
     }
 
     public bool BeginDeathSequence(PlayerController player, float sequenceTimeScale)
     {
-        if (player == null || State != GameState.Playing)
+        if (!_runFlow.BeginDeathSequence(player, sequenceTimeScale, Time.unscaledTime))
         {
             return false;
         }
 
-        pendingRevivePlayer = player;
-        State = GameState.Dying;
-        cinematicTimeScale = Mathf.Clamp(sequenceTimeScale, 0.05f, 1f);
         RefreshTimeScale();
         return true;
     }
 
     public void CompleteDeathSequence(PlayerController player)
     {
-        if (player == null)
-        {
-            FinalizeGameOver();
-            return;
-        }
-
-        pendingRevivePlayer = player;
-        HandlePlayerDeath(player);
-    }
-
-    public void HandlePlayerDeath(PlayerController player)
-    {
-        if (player == null)
-        {
-            FinalizeGameOver();
-            return;
-        }
-
-        pendingRevivePlayer = player;
-        if (CanOfferRevive())
-        {
-            State = GameState.RevivePrompt;
-            cinematicTimeScale = 1f;
-            RefreshTimeScale();
-            return;
-        }
-
-        FinalizeGameOver();
+        HandleRunFlowOutcome(_runFlow.CompleteDeathSequence(player, CanOfferRevive(), Time.unscaledTime));
     }
 
     public void AcceptReviveOffer()
     {
-        if (State != GameState.RevivePrompt || pendingRevivePlayer == null)
+        if (State != GameState.RevivePrompt || _runFlow.PendingRevivePlayer == null)
         {
             return;
         }
@@ -256,14 +249,47 @@ public sealed class GameManager : MonoBehaviour
 
     public void DeclineReviveOffer()
     {
-        FinalizeGameOver();
+        HandleRunFlowOutcome(_runFlow.DeclineRevive());
+    }
+
+    public bool CanClaimDoubleRewards => !doubleRewardsGranted && LastRunSummary.Credits > 0 && MonetizationManager.Instance != null && MonetizationManager.Instance.CanShowRewardedAd;
+
+    public void ClaimDoubleRewards(Action<bool> onCompleted)
+    {
+        if (!CanClaimDoubleRewards)
+        {
+            onCompleted?.Invoke(false);
+            return;
+        }
+
+        MonetizationManager.Instance.ShowRewardedDoubleRewards(succeeded =>
+        {
+            if (!succeeded)
+            {
+                onCompleted?.Invoke(false);
+                return;
+            }
+
+            doubleRewardsGranted = true;
+            if (EconomySystem.Instance != null)
+            {
+                EconomySystem.Instance.AddCredits(LastRunSummary.Credits, "double_rewards");
+            }
+            else
+            {
+                ProgressionManager.Instance?.AddSoftCurrency(LastRunSummary.Credits);
+            }
+            onCompleted?.Invoke(true);
+        });
     }
 
     public void AddCredits(int amount)
     {
         if (amount > 0)
         {
-            Credits += amount;
+            float multiplier = LimitedTimeEventSystem.Instance != null ? LimitedTimeEventSystem.Instance.CreditMultiplier : 1f;
+            float liveOpsMultiplier = LiveOpsSystem.Instance != null ? LiveOpsSystem.Instance.GetRewardMultiplier() : 1f;
+            Credits += Mathf.Max(1, Mathf.RoundToInt(amount * multiplier * liveOpsMultiplier));
         }
     }
 
@@ -271,13 +297,31 @@ public sealed class GameManager : MonoBehaviour
     {
         if (amount > 0)
         {
-            Score += amount * scoreMultiplier;
+            float multiplier = LimitedTimeEventSystem.Instance != null ? LimitedTimeEventSystem.Instance.ScoreMultiplier : 1f;
+            float liveOpsMultiplier = LiveOpsSystem.Instance != null ? LiveOpsSystem.Instance.GetRewardMultiplier() : 1f;
+            float openingBoost = IsOpeningMoments ? openingScoreBoostMultiplier : 1f;
+            Score += Mathf.RoundToInt(amount * multiplier * liveOpsMultiplier * openingBoost) * ScoreMultiplier;
         }
     }
 
-    public void SetScoreMultiplier(int multiplier)
+    public void RegisterDeathReason(string reason)
     {
-        scoreMultiplier = Mathf.Max(1, multiplier);
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            return;
+        }
+
+        pendingDeathReason = reason;
+    }
+
+    public void SetPowerUpScoreMultiplier(int multiplier)
+    {
+        powerUpScoreMultiplier = Mathf.Max(1, multiplier);
+    }
+
+    public void SetFeverScoreMultiplier(int multiplier)
+    {
+        feverScoreMultiplier = Mathf.Max(1, multiplier);
     }
 
     public void SetHackTimeScale(bool enabled, float slowedScale)
@@ -333,6 +377,29 @@ public sealed class GameManager : MonoBehaviour
         OnBossEncounterChanged?.Invoke(IsBossEncounterActive, ActiveBoss);
     }
 
+    public void SetBossRewardPresentation(string bossName, string rewardTitle, int bossCredits, int tier)
+    {
+        if (!string.IsNullOrWhiteSpace(rewardTitle))
+        {
+            LastRunRewardTitle = rewardTitle;
+        }
+        else
+        {
+            LastRunRewardTitle = "Boss Cache";
+        }
+
+        LastRunBossCredits = Mathf.Max(0, bossCredits);
+        int resolvedTier = Mathf.Max(1, tier);
+        string clearanceLabel = resolvedTier switch
+        {
+            1 => "Gateway clearance secured.",
+            2 => "Market route unlocked.",
+            3 => "Security grid broken open.",
+            _ => "Citadel access forced wide open."
+        };
+        LastRunRewardDetail = $"{bossName} neutralized // +{LastRunBossCredits} cache credits // Tier {resolvedTier} clearance earned. {clearanceLabel}";
+    }
+
     private void FinalizeGameOver()
     {
         if (State == GameState.GameOver)
@@ -340,58 +407,58 @@ public sealed class GameManager : MonoBehaviour
             return;
         }
 
-        LastRunSummary = new RunSummary
+        try
         {
-            Score = Score,
-            Credits = Credits,
-            Distance = Distance,
-            SurvivalTime = SurvivalTime
-        };
-
-        SetBossEncounterState(false, null);
-        CommitRunRewards();
-        CommitEndOfRunSystems();
-        pendingRevivePlayer = null;
-        State = GameState.GameOver;
-        RefreshTimeScale();
-        RateAppPrompt.Instance?.RecordSession();
-        StarterPackOffer.Instance?.TryShowAfterRun();
-        LoadSceneSafe(SceneNames.GameOver);
+            LastRunSummary = new RunSummary
+            {
+                Score = Score,
+                Credits = Credits,
+                Distance = Distance,
+                SurvivalTime = SurvivalTime
+            };
+            BuildRunPresentationSummary();
+            SetBossEncounterState(false, null);
+            SafeRunEndStep("ghost_complete", () => GhostRunManager.Instance?.CompleteRun(LastRunSummary));
+            SafeRunEndStep("run_analytics", () => RunAnalyticsStore.Instance?.RecordRun(LastRunSummary, pendingDeathReason));
+            CommitRunRewards();
+            CommitEndOfRunSystems();
+            SafeRunEndStep("run_ended_event", () => EventBus.Publish(new RunEndedEvent(LastRunSummary, pendingDeathReason)));
+        }
+        finally
+        {
+            _runFlow.MarkGameOver();
+            RefreshTimeScale();
+            LoadSceneSafe(SceneNames.GameOver);
+        }
     }
 
     private void HandleReviveResult(bool succeeded)
     {
-        if (!succeeded || pendingRevivePlayer == null)
+        PlayerController revivePlayer = _runFlow.PendingRevivePlayer;
+        RunFlowOutcome outcome = _runFlow.AcceptReviveResult(succeeded);
+        if (outcome != RunFlowOutcome.ResumeRun || revivePlayer == null)
         {
             FinalizeGameOver();
             return;
         }
 
-        hasUsedRevive = true;
-        State = GameState.Playing;
-        pendingRevivePlayer.Revive();
-        pendingRevivePlayer = null;
-        cinematicTimeScale = 1f;
-        SetActivePowerUp("Revive Boost", 2f);
+        revivePlayer.Revive();
+        _runFlow.ClearPendingRevivePlayer();
         RefreshTimeScale();
         AudioManager.Instance?.PlayRevive();
+        AnalyticsManager.Instance?.TrackReviveUsed(Distance);
     }
 
     private void HandleSceneLoaded(Scene scene, LoadSceneMode loadMode)
     {
+        _runFlow.NotifySceneLoaded(scene.name);
         if (scene.name == SceneNames.MainMenu)
         {
-            State = GameState.Menu;
             SetBossEncounterState(false, null);
         }
         else if (scene.name == SceneNames.GameOver)
         {
-            State = GameState.GameOver;
             MonetizationManager.Instance?.ShowInterstitialGameOver();
-        }
-        else if (scene.name == SceneNames.GameScene && State == GameState.Menu)
-        {
-            State = GameState.Playing;
         }
 
         RefreshTimeScale();
@@ -409,12 +476,19 @@ public sealed class GameManager : MonoBehaviour
         BossesDefeatedThisRun = 0;
         scoreRemainder = 0f;
         Player = null;
-        pendingRevivePlayer = null;
-        hasUsedRevive = false;
+        doubleRewardsGranted = false;
         runRewardsCommitted = false;
+        pendingDeathReason = "unknown";
+        nextDistanceAnalyticsMilestone = 500;
         SetBossEncounterState(false, null);
-        SetScoreMultiplier(1);
+        SetPowerUpScoreMultiplier(1);
+        SetFeverScoreMultiplier(1);
         SetActivePowerUp("Ready", 0f);
+        LastRunRewardTitle = "Run Cache";
+        LastRunRewardDetail = "Push deeper to unlock district rewards.";
+        LastRunDistrictName = RunDistrictCatalog.ResolveName(0f);
+        LastRunGrade = "C";
+        LastRunBossCredits = 0;
         ResetTimeControls();
         MilestoneSystem.Instance?.ResetForRun();
         ComboSystem.Instance?.ResetAll();
@@ -426,7 +500,6 @@ public sealed class GameManager : MonoBehaviour
     {
         hackTimeScale = 1f;
         powerUpTimeScale = 1f;
-        cinematicTimeScale = 1f;
         RefreshTimeScale();
     }
 
@@ -439,7 +512,7 @@ public sealed class GameManager : MonoBehaviour
         }
         else if (State == GameState.Dying)
         {
-            nextTimeScale = cinematicTimeScale;
+            nextTimeScale = _runFlow.CinematicTimeScale;
         }
         else if (State == GameState.Paused || State == GameState.RevivePrompt)
         {
@@ -457,7 +530,11 @@ public sealed class GameManager : MonoBehaviour
 
     private bool CanOfferRevive()
     {
-        return !hasUsedRevive && MonetizationManager.Instance != null && MonetizationManager.Instance.CanShowRewardedAd;
+        return !HasUsedRevive &&
+               MonetizationManager.Instance != null &&
+               MonetizationManager.Instance.CanOfferRevive(Distance) &&
+               ReviveOverlayController.Instance != null &&
+               ReviveOverlayController.Instance.IsReady;
     }
 
     private void CommitRunRewards()
@@ -468,41 +545,54 @@ public sealed class GameManager : MonoBehaviour
         }
 
         runRewardsCommitted = true;
-        if (ProgressionManager.Instance != null)
+        SafeRunEndStep("progression_rewards", () =>
         {
-            ProgressionManager.Instance.AddSoftCurrency(Credits);
-            ProgressionManager.Instance.CommitRunStats(LastRunSummary);
-        }
-
-        XpLevelSystem.Instance?.AwardRunXp(LastRunSummary);
+            if (ProgressionManager.Instance != null)
+            {
+                ProgressionManager.Instance.AddSoftCurrency(Credits);
+                ProgressionManager.Instance.CommitRunStats(LastRunSummary);
+            }
+        });
+        SafeRunEndStep("xp_rewards", () => XpLevelSystem.Instance?.AwardRunXp(LastRunSummary));
     }
 
     private void CommitEndOfRunSystems()
     {
-        AchievementSystem.Instance?.CheckAfterRun(LastRunSummary);
-        LeaderboardSystem.Instance?.SubmitRun(LastRunSummary);
-        AnalyticsManager.Instance?.TrackRunEnd(LastRunSummary);
-        MonetizationV2.Instance?.AddToPiggyBank(LastRunSummary.Credits);
-        SeasonPassSystem.Instance?.AddSeasonXp(Mathf.FloorToInt(LastRunSummary.Distance * 0.3f));
-        GooglePlayManager.Instance?.SubmitScore(LastRunSummary.Score);
-        NotificationScheduler.Instance?.RecordPlaySession();
-
         int nearMisses = NearMissDetector.Instance != null ? NearMissDetector.Instance.NearMissCount : 0;
         int maxCombo = ComboSystem.Instance != null ? ComboSystem.Instance.MaxCombo : 0;
-        DailyChallengeSystem.Instance?.UpdateProgressAfterRun(LastRunSummary, DronesDestroyedThisRun, HacksPerformedThisRun, nearMisses, maxCombo);
-        MissionSystem.Instance?.RecordProgress(MissionType.Distance, Mathf.FloorToInt(LastRunSummary.Distance));
+        SafeRunEndStep("achievements", () => AchievementSystem.Instance?.CheckAfterRun(LastRunSummary));
+        SafeRunEndStep("leaderboard", () => LeaderboardSystem.Instance?.SubmitRun(LastRunSummary));
+        SafeRunEndStep("piggy_bank", () => MonetizationV2.Instance?.AddToPiggyBank(LastRunSummary.Credits));
+        SafeRunEndStep("season_pass", () => SeasonPassSystem.Instance?.AddSeasonXp(Mathf.FloorToInt(LastRunSummary.Distance * 0.3f)));
+        SafeRunEndStep("platform_score", () => GooglePlayManager.Instance?.SubmitScore(LastRunSummary.Score));
+        SafeRunEndStep("notification_session", () => NotificationScheduler.Instance?.RecordPlaySession());
+        SafeRunEndStep("cloud_save", () => CloudSaveManager.Instance?.SaveProgress());
+        SafeRunEndStep("daily_challenges", () => DailyChallengeSystem.Instance?.UpdateProgressAfterRun(LastRunSummary, DronesDestroyedThisRun, HacksPerformedThisRun, nearMisses, maxCombo));
+        SafeRunEndStep("mission_distance", () => MissionSystem.Instance?.RecordProgress(MissionType.Distance, Mathf.FloorToInt(LastRunSummary.Distance)));
     }
 
     private void LoadSceneSafe(string sceneName)
     {
-        if (SceneLoader.Instance != null)
+        if (!Application.CanStreamedLevelBeLoaded(sceneName))
         {
-            SceneLoader.Instance.LoadScene(sceneName);
+            Debug.LogError($"[GameManager] Scene '{sceneName}' is not in build settings or cannot be loaded.");
+            return;
         }
-        else
+
+        try
         {
-            SceneManager.LoadScene(sceneName);
+            if (SceneLoader.Instance != null)
+            {
+                SceneLoader.Instance.LoadScene(sceneName);
+                return;
+            }
         }
+        catch (Exception exception)
+        {
+            Debug.LogError($"[GameManager] SceneLoader failed for '{sceneName}': {exception}");
+        }
+
+        SceneManager.LoadScene(sceneName);
     }
 
     private float GetBaseForwardSpeed()
@@ -522,11 +612,95 @@ public sealed class GameManager : MonoBehaviour
 
     private float GetScoreRatePerSecond()
     {
-        return balanceConfig != null ? balanceConfig.ScoreRatePerSecond : scoreRatePerSecond;
+        float rate = balanceConfig != null ? balanceConfig.ScoreRatePerSecond : scoreRatePerSecond;
+        if (IsOpeningMoments)
+        {
+            rate *= openingScoreBoostMultiplier;
+        }
+
+        return rate;
     }
 
     private float GetDistanceScale()
     {
         return balanceConfig != null ? balanceConfig.DistanceScale : distanceScale;
+    }
+
+    private void BuildRunPresentationSummary()
+    {
+        LastRunDistrictName = RunDistrictCatalog.ResolveName(Distance);
+        LastRunGrade = ResolveRunGrade(Score, Distance, BossesDefeatedThisRun, HasUsedRevive);
+
+        if (LastRunBossCredits <= 0)
+        {
+            LastRunRewardTitle = BossesDefeatedThisRun > 0 ? "District Cache" : "Courier Payout";
+            LastRunRewardDetail = BossesDefeatedThisRun > 0
+                ? $"Cleared {BossesDefeatedThisRun} boss encounter{(BossesDefeatedThisRun == 1 ? string.Empty : "s")} in {LastRunDistrictName}."
+                : $"Reached {LastRunDistrictName}. Travel farther for boss chests and premium drops.";
+        }
+        else
+        {
+            LastRunRewardDetail = $"{LastRunRewardDetail} Final district: {LastRunDistrictName}.";
+        }
+    }
+
+    private int GetResolvedScoreMultiplier()
+    {
+        return Mathf.Max(1, powerUpScoreMultiplier) * Mathf.Max(1, feverScoreMultiplier);
+    }
+
+    private void HandleRunFlowOutcome(RunFlowOutcome outcome)
+    {
+        switch (outcome)
+        {
+            case RunFlowOutcome.ShowRevivePrompt:
+                RefreshTimeScale();
+                ReviveOverlayController.Instance?.FocusPrompt();
+                break;
+            case RunFlowOutcome.FinalizeGameOver:
+                FinalizeGameOver();
+                break;
+            case RunFlowOutcome.ResumeRun:
+            case RunFlowOutcome.None:
+            default:
+                break;
+        }
+    }
+
+    private static void SafeRunEndStep(string stepName, Action action)
+    {
+        if (action == null)
+        {
+            return;
+        }
+
+        try
+        {
+            action();
+        }
+        catch (Exception exception)
+        {
+            Debug.LogError($"[GameManager] Run end step failed: {stepName}\n{exception}");
+        }
+    }
+
+    private static string ResolveRunGrade(int score, float distance, int bossesDefeated, bool revived)
+    {
+        int gradeValue = 0;
+        if (distance >= 3000f) gradeValue += 3;
+        else if (distance >= 1800f) gradeValue += 2;
+        else if (distance >= 900f) gradeValue += 1;
+
+        if (score >= 15000) gradeValue += 2;
+        else if (score >= 7000) gradeValue += 1;
+
+        gradeValue += Mathf.Clamp(bossesDefeated, 0, 2);
+        if (revived) gradeValue -= 1;
+
+        if (gradeValue >= 6) return "S";
+        if (gradeValue >= 5) return "A";
+        if (gradeValue >= 3) return "B";
+        if (gradeValue >= 1) return "C";
+        return "D";
     }
 }

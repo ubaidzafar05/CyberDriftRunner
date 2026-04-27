@@ -77,8 +77,18 @@ public sealed class PlayerController : MonoBehaviour
         characterController = characterController == null ? GetComponent<CharacterController>() : characterController;
         shootingSystem = shootingSystem == null ? GetComponent<ShootingSystem>() : shootingSystem;
         powerUps = powerUps == null ? GetComponent<PowerUpSystem>() : powerUps;
-        vfxController = vfxController == null ? GetComponent<PlayerVfxController>() : vfxController;
         skinApplier = skinApplier == null ? GetComponent<PlayerSkinApplier>() : skinApplier;
+        if (skinApplier == null)
+        {
+            skinApplier = gameObject.AddComponent<PlayerSkinApplier>();
+        }
+
+        vfxController = vfxController == null ? GetComponent<PlayerVfxController>() : vfxController;
+        if (vfxController == null)
+        {
+            vfxController = gameObject.AddComponent<PlayerVfxController>();
+        }
+
         originalHeight = characterController.height;
         originalCenter = characterController.center;
         currentHealth = maxHealth;
@@ -178,10 +188,19 @@ public sealed class PlayerController : MonoBehaviour
             return;
         }
 
+        if (FeverMode.Instance != null && FeverMode.Instance.PreventsDamage)
+        {
+            ScreenShake.Instance?.ShakeHit();
+            HapticFeedback.Instance?.VibrateOnHit();
+            ScreenFlash.Instance?.FlashPowerUp();
+            return;
+        }
+
         if (powerUps != null && powerUps.ConsumeShieldIfActive())
         {
             ScreenShake.Instance?.ShakeHit();
             HapticFeedback.Instance?.VibrateOnHit();
+            ScreenFlash.Instance?.FlashPowerUp();
             return;
         }
 
@@ -433,7 +452,7 @@ public sealed class PlayerController : MonoBehaviour
         nextHackPulseTime = Time.unscaledTime + hackPulseInterval;
         if (TryHackNearestThreat())
         {
-            vfxController?.OnPowerUp();
+            vfxController?.OnPowerUp(PowerUpType.EmpBlast);
         }
 
         AudioManager.Instance?.PlayHackPulse();
@@ -483,7 +502,7 @@ public sealed class PlayerController : MonoBehaviour
         if (shootingSystem != null && shootingSystem.TryShootNearestTarget())
         {
             AudioManager.Instance?.PlayShoot();
-            vfxController?.OnShoot();
+            vfxController?.OnShoot(shootingSystem.CurrentWeapon);
         }
     }
 
@@ -596,6 +615,7 @@ public sealed class PlayerController : MonoBehaviour
 
     private void Die()
     {
+        GameManager.Instance?.RegisterDeathReason("damage");
         if (!GameManager.Instance.BeginDeathSequence(this, deathSequenceTimeScale))
         {
             return;

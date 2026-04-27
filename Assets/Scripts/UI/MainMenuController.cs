@@ -10,8 +10,14 @@ public sealed class MainMenuController : MonoBehaviour
     [SerializeField] private Text playerLevelText;
     [SerializeField] private Text currencyText;
     [SerializeField] private Text dailyRewardText;
+    [SerializeField] private Text routeText;
+    [SerializeField] private Text bestRunText;
+    [SerializeField] private Text loadoutText;
+    [SerializeField] private Text streakText;
     [SerializeField] private SkinShopController shopController;
     [SerializeField] private LeaderboardPanel leaderboardPanel;
+
+    private float _refreshTimer;
 
     private void Start()
     {
@@ -20,9 +26,27 @@ public sealed class MainMenuController : MonoBehaviour
             SettingsManager.Instance.OnSettingsChanged += RefreshLabels;
         }
 
+        if (DailyRewardSystem.Instance != null)
+        {
+            DailyRewardSystem.Instance.OnRewardClaimed += HandleRewardClaimed;
+        }
+
         RefreshLabels();
         if (settingsPanel != null) settingsPanel.SetActive(false);
         if (statsPanel != null) statsPanel.SetActive(false);
+        RefreshDailyReward();
+        RefreshPlayerInfo();
+    }
+
+    private void Update()
+    {
+        _refreshTimer -= Time.unscaledDeltaTime;
+        if (_refreshTimer > 0f)
+        {
+            return;
+        }
+
+        _refreshTimer = 0.35f;
         RefreshDailyReward();
         RefreshPlayerInfo();
     }
@@ -33,6 +57,11 @@ public sealed class MainMenuController : MonoBehaviour
         {
             SettingsManager.Instance.OnSettingsChanged -= RefreshLabels;
         }
+
+        if (DailyRewardSystem.Instance != null)
+        {
+            DailyRewardSystem.Instance.OnRewardClaimed -= HandleRewardClaimed;
+        }
     }
 
     public void Configure(GameObject panel, Text soundText, Text vibrationText)
@@ -40,6 +69,21 @@ public sealed class MainMenuController : MonoBehaviour
         settingsPanel = panel;
         soundValueText = soundText;
         vibrationValueText = vibrationText;
+    }
+
+    public void BindProgress(Text levelText, Text creditsText, Text rewardText)
+    {
+        playerLevelText = levelText;
+        currencyText = creditsText;
+        dailyRewardText = rewardText;
+    }
+
+    public void BindProfileDetails(Text routeValueText, Text bestValueText, Text loadoutValueText, Text streakValueText)
+    {
+        routeText = routeValueText;
+        bestRunText = bestValueText;
+        loadoutText = loadoutValueText;
+        streakText = streakValueText;
     }
 
     public void Play()
@@ -158,13 +202,25 @@ public sealed class MainMenuController : MonoBehaviour
 
         if (DailyRewardSystem.Instance.CanClaimToday)
         {
-            dailyRewardText.text = $"CLAIM {DailyRewardSystem.Instance.TodayReward} credits!";
-            dailyRewardText.color = Color.yellow;
+            dailyRewardText.text = $"DAY {DailyRewardSystem.Instance.CurrentStreak + 1} READY  //  +{DailyRewardSystem.Instance.TodayReward} CREDITS";
+            dailyRewardText.color = new Color(1f, 0.84f, 0.24f);
         }
         else
         {
-            dailyRewardText.text = "Claimed today ✓";
-            dailyRewardText.color = Color.green;
+            dailyRewardText.text = "Daily route stipend claimed";
+            dailyRewardText.color = new Color(0.34f, 1f, 0.72f);
+        }
+
+        if (streakText != null)
+        {
+            int streak = DailyRewardSystem.Instance.CurrentStreak;
+            int previewReward = DailyRewardSystem.Instance.GetRewardForDay(Mathf.Min(streak + (DailyRewardSystem.Instance.CanClaimToday ? 0 : 1), 6));
+            streakText.text = DailyRewardSystem.Instance.CanClaimToday
+                ? $"Streak {streak + 1}/7  //  Claim for +{previewReward}"
+                : $"Streak locked at {streak}/7  //  Next route stipend tomorrow";
+            streakText.color = DailyRewardSystem.Instance.CanClaimToday
+                ? new Color(0.7f, 0.92f, 1f)
+                : new Color(0.58f, 0.82f, 1f);
         }
     }
 
@@ -177,7 +233,72 @@ public sealed class MainMenuController : MonoBehaviour
 
         if (currencyText != null && ProgressionManager.Instance != null)
         {
-            currencyText.text = $"{ProgressionManager.Instance.SoftCurrency}";
+            int premium = EconomySystem.Instance != null ? EconomySystem.Instance.PremiumCurrency : 0;
+            currencyText.text = $"{ProgressionManager.Instance.SoftCurrency} CR  //  {premium} PR";
         }
+
+        if (routeText != null && ProgressionManager.Instance != null)
+        {
+            routeText.text = $"Current Route  //  {RunDistrictCatalog.ResolveName(ProgressionManager.Instance.BestDistance)}";
+        }
+
+        if (bestRunText != null && ProgressionManager.Instance != null)
+        {
+            bestRunText.text = $"Best {ProgressionManager.Instance.HighScore:000000}  //  {ProgressionManager.Instance.BestDistance:0}m";
+        }
+
+        if (loadoutText != null)
+        {
+            string skin = ProgressionManager.Instance != null ? ProgressionManager.Instance.GetSelectedSkin().DisplayName : "Street Default";
+            string trail = ResolveTrailDisplayName();
+            string weapon = ResolveWeaponDisplayName();
+            loadoutText.text = $"{skin}\n{trail}  //  {weapon}";
+        }
+    }
+
+    private void HandleRewardClaimed(int day, int credits)
+    {
+        RefreshDailyReward();
+        RefreshPlayerInfo();
+    }
+
+    private static string ResolveTrailDisplayName()
+    {
+        if (ShopSystem.Instance == null)
+        {
+            return "Default Trail";
+        }
+
+        string selected = ShopSystem.Instance.SelectedTrailId;
+        for (int i = 0; i < ShopSystem.Instance.Items.Count; i++)
+        {
+            ShopItemDefinition item = ShopSystem.Instance.Items[i];
+            if (item.ItemType == ShopItemType.Trail && item.RewardId == selected)
+            {
+                return item.DisplayName;
+            }
+        }
+
+        return "Default Trail";
+    }
+
+    private static string ResolveWeaponDisplayName()
+    {
+        if (ShopSystem.Instance == null)
+        {
+            return "Standard Blaster";
+        }
+
+        string selected = ShopSystem.Instance.SelectedWeaponSkinId;
+        for (int i = 0; i < ShopSystem.Instance.Items.Count; i++)
+        {
+            ShopItemDefinition item = ShopSystem.Instance.Items[i];
+            if (item.ItemType == ShopItemType.WeaponSkin && item.RewardId == selected)
+            {
+                return item.DisplayName;
+            }
+        }
+
+        return "Standard Blaster";
     }
 }

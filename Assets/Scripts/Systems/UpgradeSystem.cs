@@ -125,7 +125,7 @@ public sealed class UpgradeSystem : MonoBehaviour
     {
         for (int i = 0; i < _levels.Length; i++)
         {
-            _levels[i] = PlayerPrefs.GetInt(UpgradePrefix + i, 0);
+            _levels[i] = SecurePrefs.GetInt(UpgradePrefix + i, 0);
         }
     }
 
@@ -133,9 +133,9 @@ public sealed class UpgradeSystem : MonoBehaviour
     {
         for (int i = 0; i < _levels.Length; i++)
         {
-            PlayerPrefs.SetInt(UpgradePrefix + i, _levels[i]);
+            SecurePrefs.SetInt(UpgradePrefix + i, _levels[i]);
         }
 
-        PlayerPrefs.Save();
+        SecurePrefs.Save();
     }
 }

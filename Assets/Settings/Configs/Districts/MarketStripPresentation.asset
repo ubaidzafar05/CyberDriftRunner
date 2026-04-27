@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d7bbfc57913e44da69ed3e94f9600b82, type: 3}
+  m_Name: MarketStripPresentation
+  m_EditorClassIdentifier: Assembly-CSharp::DistrictPresentationProfile
+  districtIndex: 1
+  districtName: Market Strip
+  cameraBackground: {r: 0.03, g: 0.01, b: 0.04, a: 1}
+  ambientColor: {r: 0.1658, g: 0.12619999, b: 0.067999996, a: 1}
+  fogColor: {r: 0.224, g: 0.092, b: 0.184, a: 1}
+  fogStartDistance: 18
+  fogEndDistance: 120
+  keyLightColor: {r: 1, g: 0.9072, b: 0.5592, a: 1}
+  keyLightIntensity: 1.16
+  fillLightColor: {r: 0.72, g: 0.652, b: 0.776, a: 1}
+  fillLightIntensity: 0.42
+  primaryAccent: {r: 1, g: 0.84, b: 0.24, a: 1}
+  secondaryAccent: {r: 1, g: 0.42, b: 0.76, a: 1}
+  tertiaryAccent: {r: 0.3, g: 1, b: 0.8, a: 1}
+  bloomIntensityMultiplier: 1.12
+  vignetteIntensityMultiplier: 1
+  chromaticBoost: 0.012
+  contrastBias: 4
+  saturationBias: 6
+  exposureBias: 0.02

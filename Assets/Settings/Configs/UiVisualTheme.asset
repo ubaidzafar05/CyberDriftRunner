@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7cffd86aece544115b7c59c21a873e6c, type: 3}
+  m_Name: UiVisualTheme
+  m_EditorClassIdentifier: Assembly-CSharp::UiVisualTheme
+  canvasBackground: {r: 0.01, g: 0.015, b: 0.04, a: 1}
+  panelFill: {r: 0.015, g: 0.024, b: 0.05, a: 0.86}
+  overlayPanelFill: {r: 0.012, g: 0.018, b: 0.04, a: 0.92}
+  hudPanelFill: {r: 0.01, g: 0.022, b: 0.048, a: 0.6}
+  panelAccent: {r: 0, g: 0.96, b: 1, a: 0.82}
+  commerceAccent: {r: 1, g: 0.78, b: 0.2, a: 0.92}
+  destructiveAccent: {r: 1, g: 0.32, b: 0.36, a: 0.88}
+  titleText: {r: 1, g: 1, b: 1, a: 1}
+  bodyText: {r: 0.74, g: 0.88, b: 1, a: 1}
+  mutedText: {r: 0.58, g: 0.76, b: 0.94, a: 1}
+  warningText: {r: 1, g: 0.84, b: 0.24, a: 1}
+  successText: {r: 0.34, g: 1, b: 0.72, a: 1}

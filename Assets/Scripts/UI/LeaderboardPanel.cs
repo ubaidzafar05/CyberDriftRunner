@@ -74,7 +74,10 @@ public sealed class LeaderboardPanel : MonoBehaviour
         row.transform.SetParent(_contentParent, false);
 
         Image bg = row.AddComponent<Image>();
-        bg.color = highlight ? new Color(0f, 0.5f, 0.7f, 0.3f) : new Color(0.1f, 0.1f, 0.18f, 0.5f);
+        bg.color = highlight ? new Color(0.05f, 0.28f, 0.4f, 0.82f) : new Color(0.04f, 0.06f, 0.12f, 0.88f);
+        Outline outline = row.AddComponent<Outline>();
+        outline.effectColor = highlight ? new Color(0.18f, 0.95f, 1f, 0.55f) : new Color(0.16f, 0.34f, 0.5f, 0.35f);
+        outline.effectDistance = new Vector2(1.5f, -1.5f);
 
         RectTransform rowRect = row.GetComponent<RectTransform>();
         rowRect.anchorMin = new Vector2(0f, 1f);
@@ -135,6 +138,9 @@ public sealed class LeaderboardPanel : MonoBehaviour
         text.color = color;
         text.alignment = TextAnchor.MiddleCenter;
         text.raycastTarget = false;
+        Shadow shadow = obj.AddComponent<Shadow>();
+        shadow.effectColor = new Color(0f, 0f, 0f, 0.55f);
+        shadow.effectDistance = new Vector2(1f, -1f);
         RectTransform rect = obj.GetComponent<RectTransform>();
         rect.anchorMin = new Vector2(0.5f, 0.5f);
         rect.anchorMax = new Vector2(0.5f, 0.5f);

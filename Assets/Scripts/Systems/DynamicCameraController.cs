@@ -1,41 +1,50 @@
 using UnityEngine;
 
-/// <summary>
-/// Dynamic runner camera with speed FOV, lane lean, fever framing, and death/revive beats.
-/// </summary>
 public sealed class DynamicCameraController : MonoBehaviour
 {
     [Header("Base Position")]
-    [SerializeField] private Vector3 baseOffset = new Vector3(0f, 5.2f, -8.5f);
-    [SerializeField] private float followSmoothing = 8f;
-    [SerializeField] private float lookHeight = 1.35f;
-    [SerializeField] private float lookAheadDistance = 8f;
+    [SerializeField] private Vector3 baseOffset = new Vector3(2.05f, 4.7f, -11.2f);
+    [SerializeField] private float followSmoothing = 7.5f;
+    [SerializeField] private float lookHeight = 1.22f;
+    [SerializeField] private float lookAheadDistance = 13.8f;
+    [SerializeField] private float laneFramingOffset = 0.54f;
+    [SerializeField] private float sideBias = 1.6f;
+    [SerializeField] private float laneCenteringWeight = 0.38f;
 
     [Header("Speed Response")]
-    [SerializeField] private float fovBase = 60f;
-    [SerializeField] private float fovMax = 80f;
+    [SerializeField] private float fovBase = 57f;
+    [SerializeField] private float fovMax = 70f;
     [SerializeField] private float fovSmoothing = 3f;
-    [SerializeField] private float heightGainAtMaxSpeed = 1.6f;
+    [SerializeField] private float heightGainAtMaxSpeed = 1.15f;
+    [SerializeField] private float dollyBackAtMaxSpeed = 1.2f;
+    [SerializeField] private float pitchDownAtMaxSpeed = 2.4f;
 
     [Header("Lean")]
-    [SerializeField] private float laneLeanAngle = 5f;
+    [SerializeField] private float laneLeanAngle = 3.4f;
     [SerializeField] private float laneLeanSmoothing = 7f;
-    [SerializeField] private float feverTiltAngle = 1.5f;
+    [SerializeField] private float feverTiltAngle = 1f;
+    [SerializeField] private float yawIntoTurnAngle = 3.2f;
+
+    [Header("Motion Bob")]
+    [SerializeField] private float motionBobAmplitude = 0.08f;
+    [SerializeField] private float motionBobFrequency = 1.8f;
 
     [Header("Fever Zoom")]
-    [SerializeField] private float feverFovBoost = 7f;
+    [SerializeField] private float feverFovBoost = 4f;
 
     [Header("Boss Framing")]
-    [SerializeField] private float bossFovBoost = 9f;
-    [SerializeField] private float bossCameraPullback = 2.4f;
-    [SerializeField] private float bossHeightBoost = 1f;
+    [SerializeField] private float bossFovBoost = 6f;
+    [SerializeField] private float bossCameraPullback = 2f;
+    [SerializeField] private float bossHeightBoost = 0.8f;
+    [SerializeField] private float bossLookBlend = 0.42f;
+    [SerializeField] private float bossSidePull = 0.9f;
 
     [Header("Death Zoom")]
     [SerializeField] private float deathZoomDuration = 0.8f;
-    [SerializeField] private float deathFovTarget = 45f;
+    [SerializeField] private float deathFovTarget = 43f;
 
     [Header("Revive Beat")]
-    [SerializeField] private float reviveFovBoost = 6f;
+    [SerializeField] private float reviveFovBoost = 3.5f;
     [SerializeField] private float reviveBoostDuration = 0.55f;
 
     private Camera _camera;
@@ -48,6 +57,8 @@ public sealed class DynamicCameraController : MonoBehaviour
     private bool _deathZoom;
     private bool _initializedPlayerTrack;
     private float _deathTimer;
+    private float _currentYaw;
+    private float _currentPitch;
 
     private void Awake()
     {
@@ -55,6 +66,12 @@ public sealed class DynamicCameraController : MonoBehaviour
         if (_camera == null)
         {
             _camera = Camera.main;
+        }
+
+        if (_camera != null)
+        {
+            _camera.orthographic = false;
+            _camera.fieldOfView = fovBase;
         }
 
         _currentFov = fovBase;
@@ -130,6 +147,7 @@ public sealed class DynamicCameraController : MonoBehaviour
         float speedPercent = Mathf.InverseLerp(9f, 22f, GameManager.Instance.CurrentForwardSpeed);
         Vector3 offset = baseOffset;
         offset.y += heightGainAtMaxSpeed * speedPercent;
+        offset.z -= dollyBackAtMaxSpeed * speedPercent;
         if (FeverMode.Instance != null && FeverMode.Instance.IsFeverActive)
         {
             offset.z -= 1.6f;
@@ -139,8 +157,13 @@ public sealed class DynamicCameraController : MonoBehaviour
         {
             offset.z -= bossCameraPullback;
             offset.y += bossHeightBoost;
+            offset.x -= bossSidePull;
         }
 
+        offset.x += sideBias;
+        offset.x += playerTransform.position.x * laneCenteringWeight;
+        offset.x += Mathf.Clamp(_smoothedLateralVelocity * 0.015f, -laneFramingOffset, laneFramingOffset);
+        offset.y += Mathf.Sin(Time.unscaledTime * motionBobFrequency) * motionBobAmplitude * Mathf.Lerp(0.45f, 1f, speedPercent);
         Vector3 targetPosition = playerTransform.position + offset;
         transform.position = Vector3.Lerp(transform.position, targetPosition, followSmoothing * Time.unscaledDeltaTime);
     }
@@ -148,16 +171,30 @@ public sealed class DynamicCameraController : MonoBehaviour
     private void UpdateRotation(Transform playerTransform)
     {
         Vector3 lookTarget = playerTransform.position + Vector3.up * lookHeight + Vector3.forward * lookAheadDistance;
+        if (GameManager.Instance.IsBossEncounterActive && GameManager.Instance.ActiveBoss != null)
+        {
+            Vector3 bossTarget = GameManager.Instance.ActiveBoss.transform.position + (Vector3.up * 0.55f);
+            lookTarget = Vector3.Lerp(lookTarget, (lookTarget + bossTarget) * 0.5f, bossLookBlend);
+        }
+
         Quaternion lookRotation = Quaternion.LookRotation((lookTarget - transform.position).normalized, Vector3.up);
 
         float rollTarget = Mathf.Clamp(-_smoothedLateralVelocity * 0.18f, -laneLeanAngle, laneLeanAngle);
+        float yawTarget = Mathf.Clamp(-_smoothedLateralVelocity * 0.12f, -yawIntoTurnAngle, yawIntoTurnAngle);
+        float speedPercent = Mathf.InverseLerp(9f, 22f, GameManager.Instance.CurrentForwardSpeed);
+        float pitchTarget = Mathf.Lerp(0f, -pitchDownAtMaxSpeed, speedPercent);
         if (FeverMode.Instance != null && FeverMode.Instance.IsFeverActive)
         {
             rollTarget += Mathf.Sin(Time.unscaledTime * 4f) * feverTiltAngle;
         }
 
         _currentRoll = Mathf.Lerp(_currentRoll, rollTarget, laneLeanSmoothing * Time.unscaledDeltaTime);
-        transform.rotation = lookRotation * Quaternion.Euler(0f, 0f, _currentRoll);
+        _currentYaw = Mathf.Lerp(_currentYaw, yawTarget, laneLeanSmoothing * Time.unscaledDeltaTime);
+        _currentPitch = Mathf.Lerp(_currentPitch, pitchTarget, laneLeanSmoothing * Time.unscaledDeltaTime);
+        transform.rotation = Quaternion.Slerp(
+            transform.rotation,
+            lookRotation * Quaternion.Euler(_currentPitch, _currentYaw, _currentRoll),
+            laneLeanSmoothing * Time.unscaledDeltaTime);
     }
 
     private void ApplyShake()
@@ -188,6 +225,8 @@ public sealed class DynamicCameraController : MonoBehaviour
         _deathZoom = false;
         _deathTimer = 0f;
         _currentRoll = 0f;
+        _currentYaw = 0f;
+        _currentPitch = 0f;
         _smoothedLateralVelocity = 0f;
         _currentFov = fovBase;
     }

@@ -20,6 +20,7 @@ public sealed class FeverMode : MonoBehaviour
     private bool _feverActive;
 
     public bool IsFeverActive => _feverActive;
+    public bool PreventsDamage => _feverActive;
     public float FeverTimeLeft => _feverTimer;
     public float FeverProgress => feverDuration > 0 ? _feverTimer / feverDuration : 0f;
     public float SpeedBoostMultiplier => _feverActive ? 1f + Mathf.Max(0f, speedBoostPercent) : 1f;
@@ -79,13 +80,7 @@ public sealed class FeverMode : MonoBehaviour
         _feverActive = true;
         _feverTimer = feverDuration;
 
-        GameManager.Instance?.SetScoreMultiplier(scoreMultiplier);
-
-        // Grant temporary shield
-        if (GameManager.Instance?.Player != null)
-        {
-            GameManager.Instance.Player.PowerUps?.ApplyPowerUp(PowerUpType.Shield, feverDuration);
-        }
+        GameManager.Instance?.SetFeverScoreMultiplier(scoreMultiplier);
 
         AudioManager.Instance?.PlayPowerUp();
         ScreenShake.Instance?.AddTrauma(0.3f);
@@ -100,7 +95,7 @@ public sealed class FeverMode : MonoBehaviour
         _feverActive = false;
         _feverTimer = 0f;
 
-        GameManager.Instance?.SetScoreMultiplier(1);
+        GameManager.Instance?.SetFeverScoreMultiplier(1);
         ComboSystem.Instance?.ResetCombo();
 
         OnFeverEnd?.Invoke();
@@ -112,6 +107,10 @@ public sealed class FeverMode : MonoBehaviour
         if (_feverActive)
         {
             EndFever();
+            return;
         }
+
+        _feverTimer = 0f;
+        GameManager.Instance?.SetFeverScoreMultiplier(1);
     }
 }

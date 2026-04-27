@@ -9,45 +9,14 @@ public sealed class MilestoneSystem : MonoBehaviour
     [SerializeField] private int[] milestoneCreditRewards = { 10, 25, 50, 75, 100, 150, 250, 400, 750 };
     [SerializeField] private int milestoneScoreBonus = 200;
 
-    [Header("Zones")]
-    [SerializeField] private float zoneLength = 500f;
-
     private int _nextMilestoneIndex;
     private int _currentZone;
 
     public int CurrentZone => _currentZone;
-    public string CurrentZoneName => GetZoneName(_currentZone);
+    public string CurrentZoneName => RunDistrictCatalog.GetByIndex(_currentZone).Name;
 
     public event System.Action<int, string> OnMilestoneReached;
     public event System.Action<int, string, Color> OnZoneChanged;
-
-    private static readonly string[] ZoneNames =
-    {
-        "Neon District",
-        "Data Highway",
-        "Chrome Wastes",
-        "Synth Corridor",
-        "Void Bridge",
-        "Quantum Alley",
-        "Plasma Depths",
-        "Infinity Grid",
-        "Singularity Core",
-        "Event Horizon"
-    };
-
-    private static readonly Color[] ZoneColors =
-    {
-        new Color(0.1f, 0.7f, 1f),
-        new Color(1f, 0.15f, 0.7f),
-        new Color(1f, 0.85f, 0.15f),
-        new Color(0.3f, 1f, 0.5f),
-        new Color(0.7f, 0.3f, 1f),
-        new Color(1f, 0.5f, 0.15f),
-        new Color(0.15f, 1f, 1f),
-        new Color(1f, 0.3f, 0.3f),
-        new Color(0.5f, 0.5f, 1f),
-        new Color(1f, 1f, 1f)
-    };
 
     private void Awake()
     {
@@ -71,7 +40,7 @@ public sealed class MilestoneSystem : MonoBehaviour
     public void ResetForRun()
     {
         _nextMilestoneIndex = 0;
-        _currentZone = 0;
+        _currentZone = RunDistrictCatalog.Resolve(0f).Index;
     }
 
     private void Update()
@@ -110,23 +79,11 @@ public sealed class MilestoneSystem : MonoBehaviour
 
     private void CheckZoneChange(float distance)
     {
-        int newZone = Mathf.FloorToInt(distance / zoneLength);
-        if (newZone > _currentZone)
+        RunDistrictCatalog.DistrictInfo district = RunDistrictCatalog.Resolve(distance);
+        if (district.Index > _currentZone)
         {
-            _currentZone = newZone;
-            string zoneName = GetZoneName(_currentZone);
-            Color zoneColor = GetZoneColor(_currentZone);
-            OnZoneChanged?.Invoke(_currentZone, zoneName, zoneColor);
+            _currentZone = district.Index;
+            OnZoneChanged?.Invoke(_currentZone, district.Name, district.AccentColor);
         }
-    }
-
-    private static string GetZoneName(int zone)
-    {
-        return ZoneNames[zone % ZoneNames.Length];
-    }
-
-    private static Color GetZoneColor(int zone)
-    {
-        return ZoneColors[zone % ZoneColors.Length];
     }
 }

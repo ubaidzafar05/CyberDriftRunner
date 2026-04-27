@@ -3,12 +3,27 @@ using UnityEngine.UI;
 
 public sealed class ReviveOverlayController : MonoBehaviour
 {
+    public static ReviveOverlayController Instance { get; private set; }
+
     [SerializeField] private GameObject panel;
     [SerializeField] private Text statusText;
     [SerializeField] private Button watchAdButton;
     [SerializeField] private Button skipButton;
 
     private bool _listenersAttached;
+    public bool IsReady => panel != null && watchAdButton != null && skipButton != null && panel.scene.IsValid();
+
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        Instance = this;
+        ValidateBindings();
+    }
 
     public void Configure(GameObject targetPanel, Text targetText, Button watchButton, Button declineButton)
     {
@@ -16,6 +31,8 @@ public sealed class ReviveOverlayController : MonoBehaviour
         statusText = targetText;
         watchAdButton = watchButton;
         skipButton = declineButton;
+        ValidateBindings();
+        EnsurePromptPriority();
     }
 
     private void Start()
@@ -34,13 +51,21 @@ public sealed class ReviveOverlayController : MonoBehaviour
         DetachListeners();
     }
 
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
+
     private void Update()
     {
         bool visible = GameManager.Instance != null && GameManager.Instance.State == GameState.RevivePrompt;
         SetVisible(visible);
         if (visible && statusText != null)
         {
-            statusText.text = "Watch a rewarded ad to continue this run once.";
+            statusText.text = "REVIVE AVAILABLE\nContinue this run once or cash out to debrief.";
         }
     }
 
@@ -100,5 +125,57 @@ public sealed class ReviveOverlayController : MonoBehaviour
         {
             panel.SetActive(visible);
         }
+
+        if (visible)
+        {
+            EnsurePromptPriority();
+        }
+    }
+
+    public void FocusPrompt()
+    {
+        if (!ValidateBindings())
+        {
+            Debug.LogError("[ReviveOverlayController] Revive prompt is not wired correctly. Falling back to game over.");
+            GameManager.Instance?.DeclineReviveOffer();
+            return;
+        }
+
+        EnsurePromptPriority();
+        SetVisible(true);
+    }
+
+    private void EnsurePromptPriority()
+    {
+        if (panel == null)
+        {
+            return;
+        }
+
+        panel.transform.SetAsLastSibling();
+        Canvas panelCanvas = panel.GetComponent<Canvas>();
+        if (panelCanvas == null)
+        {
+            panelCanvas = panel.AddComponent<Canvas>();
+        }
+
+        panelCanvas.overrideSorting = true;
+        panelCanvas.sortingOrder = 250;
+
+        if (panel.GetComponent<GraphicRaycaster>() == null)
+        {
+            panel.AddComponent<GraphicRaycaster>();
+        }
+    }
+
+    private bool ValidateBindings()
+    {
+        bool valid = panel != null && watchAdButton != null && skipButton != null;
+        if (!valid)
+        {
+            Debug.LogError("[ReviveOverlayController] Missing authored panel/button bindings.");
+        }
+
+        return valid;
     }
 }

@@ -11,28 +11,28 @@ public sealed class PostProcessingConfig : MonoBehaviour
     [SerializeField] private VisualQualityConfig qualityConfig;
 
     [Header("Bloom")]
-    [SerializeField] private float bloomIntensity = 1.9f;
-    [SerializeField] private float bloomThreshold = 0.82f;
-    [SerializeField] private float bloomScatter = 0.72f;
-    [SerializeField] private Color bloomTint = new Color(0.55f, 0.82f, 1f);
+    [SerializeField] private float bloomIntensity = 2.7f;
+    [SerializeField] private float bloomThreshold = 0.7f;
+    [SerializeField] private float bloomScatter = 0.84f;
+    [SerializeField] private Color bloomTint = new Color(0.62f, 0.88f, 1f);
 
     [Header("Vignette")]
-    [SerializeField] private float vignetteIntensity = 0.24f;
-    [SerializeField] private Color vignetteColor = new Color(0.04f, 0f, 0.13f);
+    [SerializeField] private float vignetteIntensity = 0.32f;
+    [SerializeField] private Color vignetteColor = new Color(0.04f, 0f, 0.14f);
 
     [Header("Chromatic Aberration")]
-    [SerializeField] private float chromaticIntensity = 0.08f;
+    [SerializeField] private float chromaticIntensity = 0.045f;
 
     [Header("Color Adjustments")]
-    [SerializeField] private float contrast = 12f;
+    [SerializeField] private float contrast = 24f;
     [SerializeField] private float saturation = 8f;
-    [SerializeField] private float postExposure = 0.1f;
+    [SerializeField] private float postExposure = 0.08f;
 
     [Header("Atmosphere")]
     [SerializeField] private bool enableFog = true;
-    [SerializeField] private Color fogColor = new Color(0.03f, 0.03f, 0.08f);
-    [SerializeField] private float fogStartDistance = 24f;
-    [SerializeField] private float fogEndDistance = 150f;
+    [SerializeField] private Color fogColor = new Color(0.018f, 0.024f, 0.076f);
+    [SerializeField] private float fogStartDistance = 16f;
+    [SerializeField] private float fogEndDistance = 118f;
 
     private Volume _volume;
     private VolumeProfile _runtimeProfile;
@@ -41,6 +41,8 @@ public sealed class PostProcessingConfig : MonoBehaviour
     private ChromaticAberration _chromaticAberration;
     private ColorAdjustments _colorAdjustments;
     private Tonemapping _tonemapping;
+    private DistrictPresentationProfile _activeProfile;
+    private bool _bossPresentation;
 
     private void Awake()
     {
@@ -101,29 +103,43 @@ public sealed class PostProcessingConfig : MonoBehaviour
         ApplyAtmosphere();
     }
 
+    public void ApplyDistrictProfile(DistrictPresentationProfile profile, bool bossPresentation)
+    {
+        _activeProfile = profile;
+        _bossPresentation = bossPresentation;
+        ApplyQuality(SettingsManager.Instance != null ? SettingsManager.Instance.QualityLevel : 1);
+        ApplyAtmosphere();
+    }
+
     private void ApplyQuality(int qualityLevel)
     {
         VisualQualityConfig.Tier tier = qualityConfig != null ? qualityConfig.GetTier(qualityLevel) : null;
         float effectScale = tier != null ? Mathf.Clamp01(tier.postProcessScale) : qualityLevel == 0 ? 0f : qualityLevel == 1 ? 0.65f : 1f;
+        float bloomMultiplier = _activeProfile != null ? _activeProfile.BloomIntensityMultiplier : 1f;
+        float vignetteMultiplier = _activeProfile != null ? _activeProfile.VignetteIntensityMultiplier : 1f;
+        float chromaticBoost = _activeProfile != null ? _activeProfile.ChromaticBoost : 0f;
+        float contrastBias = _activeProfile != null ? _activeProfile.ContrastBias : 0f;
+        float saturationBias = _activeProfile != null ? _activeProfile.SaturationBias : 0f;
+        float exposureBias = _activeProfile != null ? _activeProfile.ExposureBias : 0f;
         _volume.weight = effectScale <= 0f ? 0f : 1f;
 
         _bloom.active = effectScale > 0f;
-        _bloom.intensity.Override(bloomIntensity * effectScale);
+        _bloom.intensity.Override(bloomIntensity * bloomMultiplier * effectScale * (_bossPresentation ? 1.08f : 1f));
         _bloom.threshold.Override(bloomThreshold);
         _bloom.scatter.Override(bloomScatter);
-        _bloom.tint.Override(bloomTint);
+        _bloom.tint.Override(_activeProfile != null ? _activeProfile.PrimaryAccent : bloomTint);
 
         _vignette.active = effectScale > 0f;
-        _vignette.intensity.Override(vignetteIntensity * Mathf.Lerp(0.7f, 1f, effectScale));
-        _vignette.color.Override(vignetteColor);
+        _vignette.intensity.Override(vignetteIntensity * vignetteMultiplier * Mathf.Lerp(0.7f, 1f, effectScale));
+        _vignette.color.Override(_activeProfile != null ? _activeProfile.SecondaryAccent : vignetteColor);
 
         _chromaticAberration.active = qualityLevel >= 2;
-        _chromaticAberration.intensity.Override(chromaticIntensity * effectScale);
+        _chromaticAberration.intensity.Override((chromaticIntensity + chromaticBoost) * effectScale);
 
         _colorAdjustments.active = effectScale > 0f;
-        _colorAdjustments.contrast.Override(contrast * effectScale);
-        _colorAdjustments.saturation.Override(saturation * effectScale);
-        _colorAdjustments.postExposure.Override(postExposure * effectScale);
+        _colorAdjustments.contrast.Override((contrast + contrastBias) * effectScale);
+        _colorAdjustments.saturation.Override((saturation + saturationBias) * effectScale);
+        _colorAdjustments.postExposure.Override((postExposure + exposureBias + (_bossPresentation ? -0.02f : 0f)) * effectScale);
     }
 
     private void ApplyAtmosphere()
@@ -134,8 +150,8 @@ public sealed class PostProcessingConfig : MonoBehaviour
         bool allowFog = enableFog && (tier == null ? SettingsManager.Instance == null || SettingsManager.Instance.QualityLevel > 0 : tier.fogEnabled);
         RenderSettings.fog = allowFog;
         RenderSettings.fogMode = FogMode.Linear;
-        RenderSettings.fogColor = fogColor;
-        RenderSettings.fogStartDistance = fogStartDistance;
-        RenderSettings.fogEndDistance = fogEndDistance;
+        RenderSettings.fogColor = _activeProfile != null ? _activeProfile.FogColor : fogColor;
+        RenderSettings.fogStartDistance = _activeProfile != null ? _activeProfile.FogStartDistance : fogStartDistance;
+        RenderSettings.fogEndDistance = _activeProfile != null ? _activeProfile.FogEndDistance : fogEndDistance;
     }
 }

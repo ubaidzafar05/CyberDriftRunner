@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -5,8 +6,14 @@ public sealed class LeaderboardSystem : MonoBehaviour
 {
     public static LeaderboardSystem Instance { get; private set; }
 
-    private const string LeaderboardPrefix = "cdr.lb.";
+    private const string LeaderboardSaveKey = "cdr.lb.entries";
     private const int MaxEntries = 10;
+
+    [Serializable]
+    private sealed class LeaderboardState
+    {
+        public List<LeaderboardEntry> Entries = new List<LeaderboardEntry>(MaxEntries);
+    }
 
     [System.Serializable]
     public struct LeaderboardEntry
@@ -40,6 +47,12 @@ public sealed class LeaderboardSystem : MonoBehaviour
 
     public bool SubmitRun(RunSummary summary)
     {
+        if (!LeaderboardValidator.TryValidateRun(summary, out string reason))
+        {
+            Debug.LogWarning($"[LeaderboardSystem] Rejected run: {reason}");
+            return false;
+        }
+
         LeaderboardEntry entry = new LeaderboardEntry
         {
             PlayerName = GetPlayerName(),
@@ -75,14 +88,18 @@ public sealed class LeaderboardSystem : MonoBehaviour
 
     public LeaderboardSubmissionPayload BuildPayload(RunSummary summary, string playerName)
     {
-        return new LeaderboardSubmissionPayload
+        LeaderboardSubmissionPayload payload = new LeaderboardSubmissionPayload
         {
             PlayerId = SystemInfo.deviceUniqueIdentifier,
             PlayerName = playerName,
             Score = summary.Score,
             Distance = Mathf.FloorToInt(summary.Distance),
+            SurvivalTime = summary.SurvivalTime,
             DateUtc = System.DateTime.UtcNow.ToString("o")
         };
+
+        payload.Signature = LeaderboardValidator.BuildSignature(payload);
+        return payload;
     }
 
     private int InsertEntry(LeaderboardEntry entry)
@@ -114,43 +131,62 @@ public sealed class LeaderboardSystem : MonoBehaviour
         }
 
         LeaderboardSubmissionPayload payload = BuildPayload(summary, playerName);
-        _transport.SubmitScore(payload);
+        LeaderboardSubmissionReceipt receipt = _transport.SubmitScore(payload);
+        if (!receipt.Accepted)
+        {
+            Debug.LogWarning($"[LeaderboardSystem] Transport rejected submission: {receipt.Message}");
+        }
     }
 
     private void Load()
     {
         _entries.Clear();
-        int count = PlayerPrefs.GetInt(LeaderboardPrefix + "count", 0);
-        for (int i = 0; i < Mathf.Min(count, MaxEntries); i++)
+        string json = SecurePrefs.GetString(LeaderboardSaveKey, string.Empty);
+        if (!string.IsNullOrWhiteSpace(json))
         {
-            LeaderboardEntry entry = new LeaderboardEntry
+            LeaderboardState state = JsonUtility.FromJson<LeaderboardState>(json);
+            if (state != null && state.Entries != null)
             {
-                PlayerName = PlayerPrefs.GetString(LeaderboardPrefix + "name." + i, "You"),
-                Score = PlayerPrefs.GetInt(LeaderboardPrefix + "score." + i, 0),
-                Distance = PlayerPrefs.GetFloat(LeaderboardPrefix + "dist." + i, 0f),
-                Date = PlayerPrefs.GetString(LeaderboardPrefix + "date." + i, "")
-            };
-
-            _entries.Add(entry);
+                int count = Mathf.Min(state.Entries.Count, MaxEntries);
+                for (int i = 0; i < count; i++)
+                {
+                    _entries.Add(state.Entries[i]);
+                }
+                return;
+            }
         }
+
+        const string legacyPrefix = "cdr.lb.";
+        int legacyCount = PlayerPrefs.GetInt(legacyPrefix + "count", 0);
+        for (int i = 0; i < Mathf.Min(legacyCount, MaxEntries); i++)
+        {
+            _entries.Add(new LeaderboardEntry
+            {
+                PlayerName = PlayerPrefs.GetString(legacyPrefix + "name." + i, "You"),
+                Score = PlayerPrefs.GetInt(legacyPrefix + "score." + i, 0),
+                Distance = PlayerPrefs.GetFloat(legacyPrefix + "dist." + i, 0f),
+                Date = PlayerPrefs.GetString(legacyPrefix + "date." + i, "")
+            });
+        }
+
+        Save();
     }
 
     private void Save()
     {
-        PlayerPrefs.SetInt(LeaderboardPrefix + "count", _entries.Count);
-        for (int i = 0; i < _entries.Count; i++)
-        {
-            PlayerPrefs.SetString(LeaderboardPrefix + "name." + i, _entries[i].PlayerName);
-            PlayerPrefs.SetInt(LeaderboardPrefix + "score." + i, _entries[i].Score);
-            PlayerPrefs.SetFloat(LeaderboardPrefix + "dist." + i, _entries[i].Distance);
-            PlayerPrefs.SetString(LeaderboardPrefix + "date." + i, _entries[i].Date);
-        }
-
-        PlayerPrefs.Save();
+        LeaderboardState state = new LeaderboardState();
+        state.Entries.AddRange(_entries);
+        SecurePrefs.SetString(LeaderboardSaveKey, JsonUtility.ToJson(state));
+        SecurePrefs.Save();
     }
 
     private static string GetPlayerName()
     {
+        if (GooglePlayManager.Instance != null && GooglePlayManager.Instance.IsSignedIn && !string.IsNullOrWhiteSpace(GooglePlayManager.Instance.PlayerName))
+        {
+            return GooglePlayManager.Instance.PlayerName;
+        }
+
         return string.IsNullOrWhiteSpace(SystemInfo.deviceName) ? "Runner" : SystemInfo.deviceName;
     }
 }

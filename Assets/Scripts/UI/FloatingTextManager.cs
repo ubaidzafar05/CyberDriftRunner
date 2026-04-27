@@ -9,11 +9,14 @@ public sealed class FloatingTextManager : MonoBehaviour
     private const int PoolSize = 12;
     private const float FloatDuration = 0.9f;
     private const float FloatHeight = 120f;
+    private const float DuplicateRadius = 72f;
+    private const float DuplicateLifetime = 0.18f;
 
     private Canvas _canvas;
     private Font _font;
     private readonly List<FloatingEntry> _active = new();
     private readonly Queue<(Text text, RectTransform rect, CanvasGroup group)> _pool = new();
+    private readonly List<SpawnStamp> _recentSpawns = new();
 
     private struct FloatingEntry
     {
@@ -22,6 +25,13 @@ public sealed class FloatingTextManager : MonoBehaviour
         public CanvasGroup Group;
         public Vector2 StartPos;
         public float Timer;
+    }
+
+    private struct SpawnStamp
+    {
+        public Vector2 Position;
+        public float Timer;
+        public string Content;
     }
 
     private void Awake()
@@ -37,6 +47,19 @@ public sealed class FloatingTextManager : MonoBehaviour
 
     private void LateUpdate()
     {
+        for (int i = _recentSpawns.Count - 1; i >= 0; i--)
+        {
+            SpawnStamp stamp = _recentSpawns[i];
+            stamp.Timer -= Time.deltaTime;
+            if (stamp.Timer <= 0f)
+            {
+                _recentSpawns.RemoveAt(i);
+                continue;
+            }
+
+            _recentSpawns[i] = stamp;
+        }
+
         for (int i = _active.Count - 1; i >= 0; i--)
         {
             FloatingEntry entry = _active[i];
@@ -77,13 +100,17 @@ public sealed class FloatingTextManager : MonoBehaviour
         RectTransformUtility.ScreenPointToLocalPointInRectangle(
             _canvas.GetComponent<RectTransform>(), screenPos, _canvas.worldCamera, out Vector2 localPos);
 
-        // Random horizontal offset to avoid stacking
-        localPos.x += Random.Range(-30f, 30f);
+        if (ShouldSuppress(text, localPos))
+        {
+            return;
+        }
+
+        localPos.x += Random.Range(-18f, 18f);
 
         var entry = Get();
         entry.text.text = text;
         entry.text.color = color;
-        entry.text.fontSize = text.Length > 4 ? 28 : 36;
+        entry.text.fontSize = ResolveFontSize(text);
         entry.rect.anchoredPosition = localPos;
         entry.rect.gameObject.SetActive(true);
         entry.group.alpha = 1f;
@@ -95,6 +122,13 @@ public sealed class FloatingTextManager : MonoBehaviour
             Group = entry.group,
             StartPos = localPos,
             Timer = 0f
+        });
+
+        _recentSpawns.Add(new SpawnStamp
+        {
+            Position = localPos,
+            Timer = DuplicateLifetime,
+            Content = text
         });
     }
 
@@ -172,5 +206,46 @@ public sealed class FloatingTextManager : MonoBehaviour
     {
         entry.Rect.gameObject.SetActive(false);
         _pool.Enqueue((entry.Text, entry.Rect, entry.Group));
+    }
+
+    private bool ShouldSuppress(string text, Vector2 localPos)
+    {
+        if (text.Contains("¢"))
+        {
+            return false;
+        }
+
+        for (int i = 0; i < _recentSpawns.Count; i++)
+        {
+            SpawnStamp stamp = _recentSpawns[i];
+            if (stamp.Content != text)
+            {
+                continue;
+            }
+
+            if (Vector2.SqrMagnitude(stamp.Position - localPos) <= DuplicateRadius * DuplicateRadius)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private int ResolveFontSize(string text)
+    {
+        bool isCredits = text.Contains("¢");
+        if (isCredits)
+        {
+            return text.Length > 4 ? 34 : 40;
+        }
+
+        bool isEarlyRun = GameManager.Instance != null && GameManager.Instance.SurvivalTime < 15f;
+        if (isEarlyRun && !isCredits)
+        {
+            return text.Length > 4 ? 32 : 40;
+        }
+
+        return text.Length > 4 ? 28 : 36;
     }
 }

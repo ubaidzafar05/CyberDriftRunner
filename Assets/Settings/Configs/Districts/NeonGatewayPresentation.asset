@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d7bbfc57913e44da69ed3e94f9600b82, type: 3}
+  m_Name: NeonGatewayPresentation
+  m_EditorClassIdentifier: Assembly-CSharp::DistrictPresentationProfile
+  districtIndex: 0
+  districtName: Neon Gateway
+  cameraBackground: {r: 0.01, g: 0.015, b: 0.04, a: 1}
+  ambientColor: {r: 0.008599999, g: 0.14729999, b: 0.1744, a: 1}
+  fogColor: {r: 0.208, g: 0.012, b: 0.188, a: 1}
+  fogStartDistance: 18
+  fogEndDistance: 124
+  keyLightColor: {r: 0.42, g: 0.97679996, b: 1, a: 1}
+  keyLightIntensity: 1.26
+  fillLightColor: {r: 0.768, g: 0, b: 0.868, a: 1}
+  fillLightIntensity: 0.42
+  primaryAccent: {r: 0, g: 0.96, b: 1, a: 1}
+  secondaryAccent: {r: 1, g: 0, b: 0.78, a: 1}
+  tertiaryAccent: {r: 0.42, g: 0, b: 1, a: 1}
+  bloomIntensityMultiplier: 1.08
+  vignetteIntensityMultiplier: 1
+  chromaticBoost: 0.012
+  contrastBias: 2
+  saturationBias: 6
+  exposureBias: 0.08

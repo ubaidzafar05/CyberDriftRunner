@@ -1,5 +1,9 @@
 using UnityEngine;
 
+#if UNITY_ANDROID
+using Unity.Notifications.Android;
+#endif
+
 /// <summary>
 /// Schedules local push notifications for player retention.
 /// Sends reminders for daily rewards, streaks, and return-to-play prompts.
@@ -14,6 +18,10 @@ public sealed class NotificationScheduler : MonoBehaviour
     [SerializeField] private float streakRiskReminder = 22f;
 
     private const string LastPlayKey = "cdr.notify.lastPlay";
+    private const string ChannelId = "cyberdrift_retention";
+#if UNITY_ANDROID
+    private bool _channelRegistered;
+#endif
 
     private void Awake()
     {
@@ -25,6 +33,7 @@ public sealed class NotificationScheduler : MonoBehaviour
 
         Instance = this;
         DontDestroyOnLoad(gameObject);
+        RegisterNotificationChannel();
     }
 
     private void Start()
@@ -71,7 +80,6 @@ public sealed class NotificationScheduler : MonoBehaviour
 #if UNITY_ANDROID && !UNITY_EDITOR
         CancelAndroidNotifications();
 #endif
-        Debug.Log("[NotificationScheduler] Notifications cancelled");
     }
 
     private void OnApplicationPause(bool pauseStatus)
@@ -106,9 +114,13 @@ public sealed class NotificationScheduler : MonoBehaviour
     private void ScheduleNotification(string title, string body, float hoursFromNow)
     {
 #if UNITY_ANDROID && !UNITY_EDITOR
+        RegisterNotificationChannel();
         ScheduleAndroidNotification(title, body, hoursFromNow);
 #else
-        Debug.Log($"[NotificationScheduler] Scheduled: '{title}' in {hoursFromNow}h");
+        if (Application.isEditor)
+        {
+            return;
+        }
 #endif
     }
 
@@ -117,16 +129,17 @@ public sealed class NotificationScheduler : MonoBehaviour
     {
         try
         {
-            long triggerMs = (long)(hoursFromNow * 3600f * 1000f);
-            using (AndroidJavaClass unity = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+            AndroidNotification notification = new AndroidNotification
             {
-                AndroidJavaObject activity = unity.GetStatic<AndroidJavaObject>("currentActivity");
-                AndroidJavaObject context = activity.Call<AndroidJavaObject>("getApplicationContext");
+                Title = title,
+                Text = body,
+                FireTime = System.DateTime.Now.AddHours(Mathf.Max(0.01f, hoursFromNow)),
+                SmallIcon = "default",
+                LargeIcon = "default"
+            };
 
-                // Use Android's AlarmManager or NotificationManager
-                // This is a simplified stub — for production, use Unity Mobile Notifications package
-                Debug.Log($"[NotificationScheduler] Android notification scheduled: {title}");
-            }
+            int id = AndroidNotificationCenter.SendNotification(notification, ChannelId);
+            Debug.Log($"[NotificationScheduler] Android notification scheduled ({id}): {title}");
         }
         catch (System.Exception e)
         {
@@ -138,13 +151,39 @@ public sealed class NotificationScheduler : MonoBehaviour
     {
         try
         {
-            // Cancel all pending notifications
+            AndroidNotificationCenter.CancelAllDisplayedNotifications();
+            AndroidNotificationCenter.CancelAllScheduledNotifications();
             Debug.Log("[NotificationScheduler] Android notifications cancelled");
         }
         catch (System.Exception e)
         {
             Debug.LogWarning($"[NotificationScheduler] Failed to cancel: {e.Message}");
         }
+    }
+#endif
+
+#if UNITY_ANDROID
+    private void RegisterNotificationChannel()
+    {
+        if (_channelRegistered)
+        {
+            return;
+        }
+
+        AndroidNotificationChannel channel = new AndroidNotificationChannel
+        {
+            Id = ChannelId,
+            Name = "Retention Reminders",
+            Importance = Importance.Default,
+            Description = "Daily rewards, streak reminders, and return-to-play notifications."
+        };
+
+        AndroidNotificationCenter.RegisterNotificationChannel(channel);
+        _channelRegistered = true;
+    }
+#else
+    private void RegisterNotificationChannel()
+    {
     }
 #endif
 }

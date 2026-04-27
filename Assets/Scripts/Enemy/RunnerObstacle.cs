@@ -23,6 +23,7 @@ public sealed class RunnerObstacle : MonoBehaviour, IHackable
     private void Awake()
     {
         _pooledObject = GetComponent<PooledObject>();
+        FlatActorFacade.EnsureObstacleFacade(gameObject);
     }
 
     private void OnEnable()
@@ -105,6 +106,7 @@ public sealed class RunnerObstacle : MonoBehaviour, IHackable
             return;
         }
 
+        GameManager.Instance?.RegisterDeathReason("obstacle");
         player.TakeHit(collisionDamage);
         ReturnToPool();
     }

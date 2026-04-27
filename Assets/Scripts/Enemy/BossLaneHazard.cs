@@ -22,15 +22,28 @@ public sealed class BossLaneHazard : MonoBehaviour
     private int _damage;
     private bool _isActive;
     private PooledObject _pooledObject;
+    private Material _telegraphMaterial;
+    private Material _activeMaterial;
+    private Vector3 _telegraphBaseScale;
+    private Vector3 _activeBaseScale;
 
     private void Awake()
     {
         _pooledObject = GetComponent<PooledObject>();
         damageCollider = damageCollider == null ? GetComponent<Collider>() : damageCollider;
+        if (telegraphRenderer == null || activeRenderer == null)
+        {
+            FlatActorFacade.EnsureHazardFacade(gameObject, out telegraphRenderer, out activeRenderer);
+        }
         if (damageCollider != null)
         {
             damageCollider.isTrigger = true;
         }
+
+        _telegraphMaterial = telegraphRenderer != null ? telegraphRenderer.material : null;
+        _activeMaterial = activeRenderer != null ? activeRenderer.material : null;
+        _telegraphBaseScale = telegraphRenderer != null ? telegraphRenderer.transform.localScale : Vector3.one;
+        _activeBaseScale = activeRenderer != null ? activeRenderer.transform.localScale : Vector3.one;
     }
 
     private void OnEnable()
@@ -38,6 +51,15 @@ public sealed class BossLaneHazard : MonoBehaviour
         _pooledObject = _pooledObject == null ? GetComponent<PooledObject>() : _pooledObject;
         SetDamageActive(false);
         SetVisualAlpha(0.45f);
+        if (telegraphRenderer != null)
+        {
+            telegraphRenderer.transform.localScale = _telegraphBaseScale;
+        }
+
+        if (activeRenderer != null)
+        {
+            activeRenderer.transform.localScale = _activeBaseScale;
+        }
     }
 
     private void Update()
@@ -88,7 +110,14 @@ public sealed class BossLaneHazard : MonoBehaviour
     private void UpdateTelegraph()
     {
         float t = Mathf.Clamp01(_timer / _telegraphDuration);
-        SetVisualAlpha(Mathf.Lerp(0.25f, 0.85f, Mathf.PingPong(Time.time * telegraphPulseSpeed, 1f)));
+        float pulse = Mathf.Lerp(0.3f, 1f, Mathf.PingPong(Time.time * telegraphPulseSpeed, 1f));
+        SetVisualAlpha(pulse);
+        if (telegraphRenderer != null)
+        {
+            telegraphRenderer.transform.localScale = Vector3.Lerp(_telegraphBaseScale, _telegraphBaseScale + new Vector3(0.18f, 0.04f, 0.22f), pulse);
+        }
+
+        ApplyEmission(_telegraphMaterial, Color.Lerp(new Color(1f, 0.86f, 0.18f), new Color(1f, 0.28f, 0.22f), t), Mathf.Lerp(1.2f, 2.8f, t));
         if (t >= 1f)
         {
             _isActive = true;
@@ -101,6 +130,7 @@ public sealed class BossLaneHazard : MonoBehaviour
     private void UpdateActivePhase()
     {
         float t = Mathf.Clamp01(_timer / _activeDuration);
+        float pulse = 0.75f + (Mathf.Sin(Time.time * 18f) * 0.2f);
         if (_mode == HazardMode.Sweep)
         {
             float nextX = Mathf.Lerp(_startX, _endX, t);
@@ -108,6 +138,13 @@ public sealed class BossLaneHazard : MonoBehaviour
             position.x = nextX;
             transform.position = position;
         }
+
+        if (activeRenderer != null)
+        {
+            activeRenderer.transform.localScale = _activeBaseScale + new Vector3(pulse * 0.08f, pulse * 0.16f, 0f);
+        }
+
+        ApplyEmission(_activeMaterial, new Color(1f, 0.24f, 0.24f), 2.8f + pulse);
 
         if (t >= 1f)
         {
@@ -123,6 +160,7 @@ public sealed class BossLaneHazard : MonoBehaviour
             return;
         }
 
+        GameManager.Instance?.RegisterDeathReason("boss_hazard");
         player.TakeHit(_damage);
     }
 
@@ -153,7 +191,21 @@ public sealed class BossLaneHazard : MonoBehaviour
 
         Color color = telegraphRenderer.sharedMaterial != null ? telegraphRenderer.sharedMaterial.color : Color.red;
         color.a = alpha;
-        telegraphRenderer.material.color = color;
+        if (_telegraphMaterial != null)
+        {
+            _telegraphMaterial.color = color;
+        }
+    }
+
+    private void ApplyEmission(Material material, Color color, float intensity)
+    {
+        if (material == null || !material.HasProperty("_EmissionColor"))
+        {
+            return;
+        }
+
+        material.EnableKeyword("_EMISSION");
+        material.SetColor("_EmissionColor", color * intensity);
     }
 
     private void ReturnToPool()

@@ -8,7 +8,9 @@ public struct LeaderboardSubmissionPayload
     public string PlayerName;
     public int Score;
     public int Distance;
+    public float SurvivalTime;
     public string DateUtc;
+    public string Signature;
 }
 
 [Serializable]
@@ -27,7 +29,7 @@ public sealed class MockLeaderboardTransport : MonoBehaviour, ILeaderboardTransp
 {
     public LeaderboardSubmissionReceipt SubmitScore(LeaderboardSubmissionPayload payload)
     {
-        Debug.Log($"Leaderboard mock submit: {payload.PlayerName} score={payload.Score} distance={payload.Distance}");
+        Debug.Log($"Leaderboard mock submit: {payload.PlayerName} score={payload.Score} distance={payload.Distance} survival={payload.SurvivalTime:0.0}s");
         return new LeaderboardSubmissionReceipt
         {
             Accepted = true,

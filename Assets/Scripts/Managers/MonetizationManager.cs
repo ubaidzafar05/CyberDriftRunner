@@ -20,6 +20,11 @@ public sealed class MonetizationManager : MonoBehaviour
     public bool CanShowRewardedAd => adService != null && adService.CanShowRewardedAd;
     public bool CanShowInterstitialAd => adService != null && adService.CanShowInterstitialAd;
 
+    public bool CanOfferRevive(float distance)
+    {
+        return distance > 500f && CanShowRewardedAd;
+    }
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -41,7 +46,34 @@ public sealed class MonetizationManager : MonoBehaviour
             return;
         }
 
-        adService.ShowRewardedAd("revive", onCompleted);
+        adService.ShowRewardedAd("revive", succeeded =>
+        {
+            if (succeeded)
+            {
+                AnalyticsManager.Instance?.TrackAdView("revive");
+            }
+
+            onCompleted?.Invoke(succeeded);
+        });
+    }
+
+    public void ShowRewardedDoubleRewards(Action<bool> onCompleted)
+    {
+        if (adService == null)
+        {
+            onCompleted?.Invoke(false);
+            return;
+        }
+
+        adService.ShowRewardedAd("double_rewards", succeeded =>
+        {
+            if (succeeded)
+            {
+                AnalyticsManager.Instance?.TrackAdView("double_rewards");
+            }
+
+            onCompleted?.Invoke(succeeded);
+        });
     }
 
     public void ShowInterstitialGameOver()
@@ -51,7 +83,16 @@ public sealed class MonetizationManager : MonoBehaviour
             return;
         }
 
-        adService.ShowInterstitialAd("gameover", null);
+        if (MonetizationV2.Instance != null && !MonetizationV2.Instance.ShouldShowInterstitial())
+        {
+            return;
+        }
+
+        adService.ShowInterstitialAd("gameover", _ =>
+        {
+            MonetizationV2.Instance?.RecordInterstitialShown();
+            AnalyticsManager.Instance?.TrackAdView("interstitial_gameover");
+        });
     }
 
     public bool CanPurchase(string productId)

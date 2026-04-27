@@ -8,18 +8,26 @@ public sealed class BossEncounterManager : MonoBehaviour
     [SerializeField] private ObstacleSpawner obstacleSpawner;
     [SerializeField] private GameObject bossPrefab;
     [SerializeField] private GameObject bossHazardPrefab;
+    [SerializeField] private GameObject bossStagePrefab;
     [SerializeField] private float encounterIntervalDistance = 1000f;
+    [SerializeField] private float encounterWarningLeadDistance = 140f;
     [SerializeField] private float hazardTelegraphDuration = 0.85f;
     [SerializeField] private float hazardActiveDuration = 0.75f;
     [SerializeField] private int hazardPreload = 6;
+    [SerializeField] private float defeatDebriefDuration = 0.75f;
 
     private ObjectPool _bossPool;
     private ObjectPool _hazardPool;
+    private ObjectPool _stagePool;
     private Transform _poolRoot;
     private int _nextBossTier = 1;
+    private GameObject _activeStage;
+    private Coroutine _encounterResolveRoutine;
 
     public BossController ActiveBoss { get; private set; }
     public bool IsEncounterActive => ActiveBoss != null && ActiveBoss.IsAlive;
+    public float DistanceToNextEncounter => Mathf.Max(0f, (_nextBossTier * encounterIntervalDistance) - (GameManager.Instance != null ? GameManager.Instance.Distance : 0f));
+    public bool IsEncounterImminent => !IsEncounterActive && GameManager.Instance != null && DistanceToNextEncounter > 0f && DistanceToNextEncounter <= encounterWarningLeadDistance;
 
     private void Awake()
     {
@@ -67,12 +75,13 @@ public sealed class BossEncounterManager : MonoBehaviour
         BeginEncounter();
     }
 
-    public void Configure(PlayerController targetPlayer, ObstacleSpawner spawner, GameObject configuredBossPrefab, GameObject configuredHazardPrefab)
+    public void Configure(PlayerController targetPlayer, ObstacleSpawner spawner, GameObject configuredBossPrefab, GameObject configuredHazardPrefab, GameObject configuredBossStagePrefab)
     {
         player = targetPlayer;
         obstacleSpawner = spawner;
         bossPrefab = configuredBossPrefab;
         bossHazardPrefab = configuredHazardPrefab;
+        bossStagePrefab = configuredBossStagePrefab;
     }
 
     public void SpawnLaneStrike(float laneX, float zPosition, int damage, int tier)
@@ -99,15 +108,15 @@ public sealed class BossEncounterManager : MonoBehaviour
 
     public void CompleteEncounter(BossController boss)
     {
-        if (boss != ActiveBoss)
+        if (boss != ActiveBoss || _encounterResolveRoutine != null)
         {
             return;
         }
 
-        obstacleSpawner?.SetEncounterSuspended(false);
-        GameManager.Instance?.SetBossEncounterState(false, null);
-        ActiveBoss = null;
-        _nextBossTier++;
+        ScreenShake.Instance?.AddTrauma(0.3f);
+        HapticFeedback.Instance?.VibrateHeavy();
+        AudioManager.Instance?.PlayBossDefeated();
+        _encounterResolveRoutine = StartCoroutine(ResolveEncounterRoutine());
     }
 
     private void BeginEncounter()
@@ -120,8 +129,21 @@ public sealed class BossEncounterManager : MonoBehaviour
         BossController boss = GetBossPool().Acquire(new Vector3(0f, 3f, player.transform.position.z + 24f), Quaternion.identity).GetComponent<BossController>();
         boss.Initialize(this, _nextBossTier, obstacleSpawner != null ? obstacleSpawner.LaneOffset : 2.5f);
         ActiveBoss = boss;
+        AcquireBossStage(boss);
         obstacleSpawner?.SetEncounterSuspended(true);
         GameManager.Instance?.SetBossEncounterState(true, boss);
+    }
+
+    private void LateUpdate()
+    {
+        if (!IsEncounterActive || ActiveBoss == null || _activeStage == null || player == null)
+        {
+            return;
+        }
+
+        Vector3 bossPosition = ActiveBoss.transform.position;
+        Vector3 stageTarget = new Vector3(0f, 0f, Mathf.Max(player.transform.position.z + 12f, bossPosition.z - 5f));
+        _activeStage.transform.position = Vector3.Lerp(_activeStage.transform.position, stageTarget, 6f * Time.deltaTime);
     }
 
     private ObjectPool GetBossPool()
@@ -142,5 +164,61 @@ public sealed class BossEncounterManager : MonoBehaviour
         }
 
         return _hazardPool;
+    }
+
+    private ObjectPool GetStagePool()
+    {
+        if (_stagePool == null && bossStagePrefab != null)
+        {
+            _stagePool = new ObjectPool(bossStagePrefab, 1, _poolRoot);
+        }
+
+        return _stagePool;
+    }
+
+    private void AcquireBossStage(BossController boss)
+    {
+        ReleaseActiveStage();
+        ObjectPool pool = GetStagePool();
+        if (pool == null || boss == null || player == null)
+        {
+            return;
+        }
+
+        Vector3 stagePosition = new Vector3(0f, 0f, Mathf.Max(player.transform.position.z + 12f, boss.transform.position.z - 5f));
+        _activeStage = pool.Acquire(stagePosition, Quaternion.identity);
+        _activeStage.transform.localScale = Vector3.one * Mathf.Lerp(1f, 1.22f, Mathf.Clamp01((boss.Tier - 1) / 3f));
+    }
+
+    private void ReleaseActiveStage()
+    {
+        if (_activeStage == null)
+        {
+            return;
+        }
+
+        PooledObject pooled = _activeStage.GetComponent<PooledObject>();
+        if (pooled != null)
+        {
+            pooled.ReturnToPool();
+        }
+        else
+        {
+            _activeStage.SetActive(false);
+        }
+
+        _activeStage = null;
+    }
+
+    private System.Collections.IEnumerator ResolveEncounterRoutine()
+    {
+        yield return new WaitForSecondsRealtime(defeatDebriefDuration);
+
+        obstacleSpawner?.SetEncounterSuspended(false);
+        GameManager.Instance?.SetBossEncounterState(false, null);
+        ReleaseActiveStage();
+        ActiveBoss = null;
+        _nextBossTier++;
+        _encounterResolveRoutine = null;
     }
 }

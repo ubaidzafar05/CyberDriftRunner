@@ -7,7 +7,7 @@ public static class GeneratedArtBootstrapper
     private const string ArtRoot = "Assets/Art";
     private const string TexturesRoot = "Assets/Art/Textures";
     private const string GeneratedRoot = "Assets/Art/Textures/Generated";
-    private const int TextureSize = 256;
+    private const int TextureSize = 512;
 
     public static Texture2D EnsureTexture(string materialName, Color primary, Color secondary)
     {
@@ -186,10 +186,14 @@ public static class GeneratedArtBootstrapper
             return;
         }
 
-        importer.textureCompression = TextureImporterCompression.Compressed;
-        importer.filterMode = FilterMode.Bilinear;
+        importer.textureCompression = TextureImporterCompression.CompressedHQ;
+        importer.filterMode = FilterMode.Trilinear;
         importer.wrapMode = materialName.ToLowerInvariant().Contains("billboard") ? TextureWrapMode.Clamp : TextureWrapMode.Repeat;
-        importer.anisoLevel = 2;
+        importer.anisoLevel = 6;
+        importer.mipmapEnabled = true;
+        importer.streamingMipmaps = true;
+        importer.streamingMipmapsPriority = 0;
+        importer.npotScale = TextureImporterNPOTScale.None;
         importer.sRGBTexture = true;
         importer.alphaSource = TextureImporterAlphaSource.None;
     }
